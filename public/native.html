@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/native.css">
+</head>
+<body class="native-body">
+  <div class="jarvis-window" id="jarvis-container">
+    
+    <!-- Top Command Bar (Draggable) -->
+    <header class="command-bar" id="drag-handle">
+      <div class="reactor-core" id="reactor-dot" title="JARVIS en línea">
+        <div class="reactor-ring"></div>
+        <div class="reactor-center"></div>
+      </div>
+
+      <input
+        type="text"
+        id="native-input"
+        class="command-input"
+        placeholder="¿En qué puedo asistirlo, señor?"
+        autocomplete="off"
+        spellcheck="false"
+        autofocus
+      />
+
+      <div class="command-actions">
+        <!-- Voice Speed / TTS toggle -->
+        <button id="native-tts-btn" class="action-btn active" title="Voz de JARVIS (Clic para silenciar / activar)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+          <span class="btn-badge" id="voice-speed-badge">1.35x</span>
+        </button>
+
+        <!-- Mic Button -->
+        <button id="native-mic-btn" class="action-btn mic-btn" title="Hablar (qwen3-asr)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+
+        <!-- Send Button -->
+        <button id="native-send-btn" class="action-btn send-btn" title="Enviar directiva (Enter)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+
+        <!-- Close / Hide Button -->
+        <button id="native-close-btn" class="action-btn close-btn" title="Ocultar (Esc)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Inline Status Indicator (Discrete line under input, visible only during work) -->
+    <div class="inline-status" id="activity-strip" style="display: none;">
+      <div class="status-pulse"></div>
+      <span class="status-text" id="activity-label">Procesando...</span>
+      <span class="status-tool" id="activity-tool-badge" style="display: none;"></span>
+      <button id="btn-abort-task" class="status-abort" title="Cancelar tarea">Detener</button>
+    </div>
+
+    <!-- Security Approval Overlay (Modal, only for HIGH risk tools) -->
+    <div class="security-card" id="approval-card" style="display: none;">
+      <div class="security-header">
+        <span class="security-badge">AUTORIZACIÓN REQUERIDA</span>
+        <span class="security-risk" id="approval-risk">HIGH</span>
+      </div>
+      <p class="security-desc">El agente solicita ejecutar la siguiente acción:</p>
+      <div class="security-detail">
+        <span class="tool-tag" id="approval-tool">--</span>
+        <code id="approval-args">--</code>
+      </div>
+      <div class="security-actions">
+        <button id="btn-native-deny" class="sec-btn danger">DENEGAR</button>
+        <button id="btn-native-approve" class="sec-btn confirm">AUTORIZAR</button>
+      </div>
+    </div>
+
+    <!-- Main Content Area: Idle Suggestions or Fluid Response Stream -->
+    <main class="content-area" id="content-area">
+      <!-- Empty / Idle State -->
+      <div class="idle-state" id="idle-state">
+        <div class="idle-greeting">Sistemas en línea, señor.</div>
+        <div class="suggestion-pills">
+          <button class="pill-btn" data-prompt="¿Qué archivos y estructura tiene el proyecto actual?">📁 Explorar proyecto</button>
+          <button class="pill-btn" data-prompt="Revisá el estado del sistema y procesos activos en la máquina">⚡ Estado del sistema</button>
+          <button class="pill-btn" data-prompt="Buscá las últimas novedades de modelos de inteligencia artificial locales">🌐 Novedades IA</button>
+        </div>
+      </div>
+
+      <!-- Response Stream (Appears seamlessly without nested boxes) -->
+      <div class="stream-panel" id="response-panel" style="display: none;">
+        <div class="stream-content" id="response-body"></div>
+        <div class="stream-actions">
+          <button id="btn-copy-response" class="stream-btn" title="Copiar al portapapeles">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copiar
+          </button>
+          <button id="btn-clear-response" class="stream-btn" title="Limpiar pantalla">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Subtle Floating Footer -->
+    <footer class="command-footer">
+      <div class="footer-hint">
+        <span><kbd>Alt</kbd> + <kbd>Espacio</kbd> invocar</span>
+        <span><kbd>Esc</kbd> ocultar</span>
+      </div>
+      <div class="footer-meta">
+        <span class="meta-pill interactive" id="voice-indicator" title="Clic para cambiar velocidad de voz">🔊 1.35x</span>
+        <span class="meta-pill">⚡ Turbo</span>
+        <span class="meta-pill">qwen3.5:9b</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="js/native.js"></script>
+</body>
+</html>

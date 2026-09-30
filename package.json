@@ -1,0 +1,36 @@
+{
+  "name": "jarvis-agent",
+  "version": "1.0.0",
+  "description": "JARVIS-inspired autonomous local AI agent powered by Ollama",
+  "main": "src/server/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "build": "tsc",
+    "start": "node dist/server/index.js",
+    "desktop": "electron src/desktop/main.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "jarvis",
+    "ai-agent",
+    "ollama",
+    "local-llm",
+    "autonomous-agent"
+  ],
+  "author": "Antigravity & User",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "electron": "^44.5.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

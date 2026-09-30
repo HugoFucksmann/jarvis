@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.A.R.V.I.S. // Local Autonomous AI System</title>
+  <meta name="description" content="Local autonomous AI agent powered by Ollama and Qwen, inspired by Iron Man's JARVIS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/jarvis.css">
+</head>
+<body class="jarvis-theme">
+  <!-- Scanline & Ambient Background Overlay -->
+  <div class="hud-scanlines"></div>
+  <div class="hud-grid-background"></div>
+
+  <!-- Main Container -->
+  <div class="jarvis-app">
+    <!-- Header / HUD Top Bar -->
+    <header class="hud-header">
+      <div class="header-left">
+        <div class="reactor-pulse-icon" id="reactor-icon">
+          <div class="reactor-core"></div>
+          <div class="reactor-ring"></div>
+        </div>
+        <div class="system-branding">
+          <h1 class="system-title">J.A.R.V.I.S.</h1>
+          <span class="system-subtitle">MARK VII // AUTONOMOUS LOCAL PROTOCOL</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="status-badge" id="system-status-badge">
+          <span class="status-indicator"></span>
+          <span class="status-text" id="status-text">SYSTEM ONLINE</span>
+        </div>
+        <div class="model-badge" id="current-model-display">
+          <span class="label">NEURAL ENGINE:</span>
+          <select id="model-selector" class="hud-select" title="Seleccionar Modelo Ollama">
+            <option value="qwen3.5:9b">qwen3.5:9b</option>
+          </select>
+        </div>
+        <div class="model-badge voice-device-badge" id="voice-device-display" title="Dispositivo de cómputo para frozenlab/qwen3-asr:0.6b">
+          <span class="label">VOICE (qwen3-asr):</span>
+          <select id="voice-device-selector" class="hud-select hud-select-voice">
+            <option value="cpu" selected>CPU (Recomendado - 0 VRAM)</option>
+            <option value="gpu">GPU (RTX 3070 Ti)</option>
+          </select>
+        </div>
+        <div class="model-badge mode-badge" id="thinking-mode-display" title="Alternar entre modo Turbo ultrarrápido o razonamiento profundo">
+          <span class="label">VELOCIDAD:</span>
+          <select id="thinking-mode-selector" class="hud-select hud-select-turbo">
+            <option value="turbo" selected>⚡ TURBO (&lt; 1s)</option>
+            <option value="thinking">🧠 DEEP THINKING</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button id="btn-toggle-telemetry" class="hud-nav-btn" title="Telemetría">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>SISTEMA</span>
+        </button>
+        <button id="btn-toggle-audit" class="hud-nav-btn" title="Registro de Auditoría">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>SEGURIDAD</span>
+        </button>
+        <button id="btn-toggle-memory" class="hud-nav-btn" title="Memoria Persistente">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          <span>MEMORIA</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Area -->
+    <div class="hud-body">
+      <!-- Chat & Execution Stage -->
+      <main class="chat-section">
+        <!-- Live Agent Activity Banner -->
+        <div class="agent-activity-tracker" id="activity-tracker">
+          <div class="tracker-header">
+            <div class="spinner-hud" id="activity-spinner"></div>
+            <span class="tracker-state" id="activity-state">LISTO PARA RECIBIR ÓRDENES</span>
+          </div>
+          <div class="tracker-details" id="activity-details"></div>
+          <div class="tracker-actions" id="tracker-actions" style="display: none;">
+            <button id="btn-cancel-task" class="hud-btn hud-btn-danger">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+              ABORTAR TAREA
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages History Stream -->
+        <div class="messages-container" id="messages-container">
+          <!-- Initial Welcome Message -->
+          <div class="message-card assistant welcome-card">
+            <div class="message-meta">
+              <span class="author-tag">J.A.R.V.I.S.</span>
+              <span class="time-tag">INICIALIZADO</span>
+            </div>
+            <div class="message-content">
+              <p>Saludos, señor. Todos los sistemas de diagnóstico están en línea y enlazados al modelo local <strong>qwen3.5:9b</strong>.</p>
+              <p>Tengo acceso supervisado al sistema de archivos, ejecución segura en PowerShell, inspección de procesos y búsqueda web. ¿En qué tarea técnica desea que procedamos?</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea
+              id="user-input"
+              class="hud-textarea"
+              placeholder="Instrucción para JARVIS... (ej: 'Revisa qué archivos hay en el proyecto y crea un informe')"
+              rows="1"
+            ></textarea>
+            <div class="input-controls">
+              <select id="mic-device-selector" class="hud-select hud-select-mic-input" title="Seleccionar Micrófono de Entrada">
+                <option value="">Micrófono Predeterminado</option>
+              </select>
+              <button id="btn-voice-record" class="hud-btn hud-btn-mic" title="Presionar para hablar (Speech-to-Text vía Ollama qwen3-asr)">
+                <svg class="mic-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span id="mic-text">VOZ</span>
+              </button>
+              <button id="btn-send" class="hud-btn hud-btn-primary" title="Enviar instrucción">
+                <span>EJECUTAR</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Collapsible Side Drawer (Telemetry, Audit, Memory) -->
+      <aside class="hud-sidebar" id="hud-sidebar">
+        <div class="sidebar-header">
+          <h2 class="sidebar-title" id="sidebar-title">TELEMETRÍA</h2>
+          <button id="btn-close-sidebar" class="hud-icon-btn" title="Cerrar panel">×</button>
+        </div>
+
+        <!-- Tab 1: Telemetry -->
+        <div class="sidebar-tab-content active" id="tab-telemetry">
+          <div class="telemetry-card">
+            <div class="card-title">HARDWARE Y ENTORNO</div>
+            <div class="metric-row">
+              <span class="label">S.O.:</span>
+              <span class="value" id="sys-os">Detectando...</span>
+            </div>
+            <div class="metric-row">
+              <span class="label">CPU:</span>
+              <span class="value" id="sys-cpu">Detectando...</span>
+            </div>
+            <div class="metric-row">
+              <span class="label">GPU:</span>
+              <span class="value" id="sys-gpu">Detectando...</span>
+            </div>
+            <div class="metric-row">
+              <span class="label">RAM USADA:</span>
+              <span class="value" id="sys-ram">-- GB</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" id="ram-progress"></div>
+            </div>
+          </div>
+
+          <div class="telemetry-card">
+            <div class="card-title">HERRAMIENTAS HABILITADAS (<span id="tools-count-badge">0</span>)</div>
+            <div class="tools-grid-list" id="tools-list"></div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Security & Audit -->
+        <div class="sidebar-tab-content" id="tab-audit">
+          <div class="card-title">REGISTRO DE AUTORIZACIONES</div>
+          <p class="section-desc">Historial auditable de herramientas y decisiones de seguridad.</p>
+          <div class="audit-stream" id="audit-stream"></div>
+        </div>
+
+        <!-- Tab 3: Long-term Memory -->
+        <div class="sidebar-tab-content" id="tab-memory">
+          <div class="card-title">MEMORIA PERSISTENTE</div>
+          <p class="section-desc">Hechos aprendidos y directivas que se conservan entre sesiones.</p>
+          <div class="memory-form">
+            <input type="text" id="memory-input" class="hud-input" placeholder="Agregar directiva o preferencia...">
+            <select id="memory-category" class="hud-select">
+              <option value="preference">Preferencia</option>
+              <option value="project">Proyecto</option>
+              <option value="environment">Entorno</option>
+            </select>
+            <button id="btn-add-memory" class="hud-btn hud-btn-secondary">GUARDAR</button>
+          </div>
+          <div class="facts-list" id="facts-list"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Interactive Authorization Modal Dialog (Stark Protocol) -->
+  <div class="modal-overlay" id="approval-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="warning-icon">⚠</div>
+        <h3 class="modal-title">AUTORIZACIÓN REQUERIDA</h3>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">El agente solicita ejecutar una acción de seguridad elevada:</p>
+        <div class="approval-detail-box">
+          <div class="approval-row"><span class="lbl">HERRAMIENTA:</span> <strong id="modal-tool-name" class="val">--</strong></div>
+          <div class="approval-row"><span class="lbl">NIVEL DE RIESGO:</span> <span id="modal-risk-badge" class="badge">HIGH</span></div>
+          <div class="approval-row"><span class="lbl">MOTIVO:</span> <span id="modal-reason" class="val">--</span></div>
+          <div class="approval-row-args">
+            <span class="lbl">PARÁMETROS:</span>
+            <pre id="modal-args" class="code-block"></pre>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-deny-action" class="hud-btn hud-btn-danger">DENEGAR ACCIÓN</button>
+        <button id="btn-approve-action" class="hud-btn hud-btn-primary">AUTORIZAR EJECUCIÓN</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

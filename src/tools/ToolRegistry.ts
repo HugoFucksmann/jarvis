@@ -1,0 +1,120 @@
+import { ITool, ToolResult, ToolExecutionContext, RiskLevel } from './types.js';
+import { ToolDefinition } from '../llm/types.js';
+import { PermissionManager } from './security/PermissionManager.js';
+import { Logger } from '../logger/Logger.js';
+
+export class ToolRegistry {
+  private tools: Map<string, ITool> = new Map();
+  private permissionManager: PermissionManager;
+  private logger = new Logger('ToolRegistry');
+
+  constructor(permissionManager: PermissionManager) {
+    this.permissionManager = permissionManager;
+  }
+
+  public registerTool(tool: ITool): void {
+    if (this.tools.has(tool.name)) {
+      this.logger.warn(`Overwriting tool registration for: ${tool.name}`);
+    }
+    this.tools.set(tool.name, tool);
+    this.logger.debug(`Registered tool: ${tool.name} [Risk: ${tool.riskLevel}]`);
+  }
+
+  public getTool(name: string): ITool | undefined {
+    return this.tools.get(name);
+  }
+
+  public getAllTools(): ITool[] {
+    return Array.from(this.tools.values());
+  }
+
+  public getDefinitions(): ToolDefinition[] {
+    return Array.from(this.tools.values()).map((t) => t.toDefinition());
+  }
+
+  public async executeTool(
+    name: string,
+    args: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const startTime = Date.now();
+    const tool = this.tools.get(name);
+
+    if (!tool) {
+      return {
+        success: false,
+        error: `Tool "${name}" is not registered in the system.`,
+      };
+    }
+
+    const { riskLevel } = this.permissionManager.evaluateRisk(tool, args);
+
+    // Step 1: Authorization
+    const authResult = await this.permissionManager.authorize(
+      tool,
+      args,
+      context.requestApproval
+    );
+
+    if (!authResult.authorized) {
+      this.permissionManager.recordAudit({
+        timestamp: new Date().toISOString(),
+        toolName: name,
+        riskLevel,
+        parameters: args,
+        approved: false,
+        approvalMode: authResult.mode,
+        success: false,
+        error: authResult.reason || 'Unauthorized',
+        executionTimeMs: Date.now() - startTime,
+      });
+
+      return {
+        success: false,
+        error: `Permission Denied: ${authResult.reason || 'Action denied by user policy'}`,
+      };
+    }
+
+    // Step 2: Execution
+    try {
+      this.logger.info(`Executing tool: ${name}`, { riskLevel });
+      const result = await tool.execute(args, context);
+      const executionTime = Date.now() - startTime;
+
+      this.permissionManager.recordAudit({
+        timestamp: new Date().toISOString(),
+        toolName: name,
+        riskLevel,
+        parameters: args,
+        approved: true,
+        approvalMode: authResult.mode,
+        success: result.success,
+        error: result.error,
+        executionTimeMs: executionTime,
+      });
+
+      return result;
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const executionTime = Date.now() - startTime;
+      this.logger.error(`Error executing tool ${name}: ${errMsg}`);
+
+      this.permissionManager.recordAudit({
+        timestamp: new Date().toISOString(),
+        toolName: name,
+        riskLevel,
+        parameters: args,
+        approved: true,
+        approvalMode: authResult.mode,
+        success: false,
+        error: errMsg,
+        executionTimeMs: executionTime,
+      });
+
+      return {
+        success: false,
+        error: `Execution error in ${name}: ${errMsg}`,
+      };
+    }
+  }
+}
