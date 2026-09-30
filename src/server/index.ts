@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -110,6 +111,29 @@ app.get('/api/audit', (_req, res) => {
   res.json({ logs: auditLogs });
 });
 
+// Security & Permissions configuration
+app.get('/api/security/permissions', (_req, res) => {
+  res.json({
+    rules: agentCore.getPermissionManager().getSecurityRules(),
+  });
+});
+
+app.post('/api/security/permissions', (req, res) => {
+  const updated = agentCore.getPermissionManager().saveSecurityRules(req.body);
+  res.json({ success: true, rules: updated });
+});
+
+app.get('/api/tasks', (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 30;
+  const tasks = agentCore.getTaskHistory().getRecentTasks(limit);
+  res.json({ tasks });
+});
+
+app.delete('/api/tasks', (_req, res) => {
+  agentCore.getTaskHistory().clearTasks();
+  res.json({ success: true });
+});
+
 app.get('/api/memory', async (req, res) => {
   const query = typeof req.query.q === 'string' ? req.query.q : undefined;
   const facts = await agentCore.getMemory().queryLongTermFacts(query);
@@ -133,6 +157,26 @@ app.post('/api/memory', async (req, res) => {
 app.delete('/api/memory/:id', async (req, res) => {
   const success = await agentCore.getMemory().deleteLongTermFact(req.params.id);
   res.json({ success });
+});
+
+app.get('/api/memory/raw', (_req, res) => {
+  const file = path.join(config.workspaceRoot, '.jarvis', 'MEMORY.md');
+  if (fs.existsSync(file)) {
+    res.json({ content: fs.readFileSync(file, 'utf-8') });
+  } else {
+    res.json({ content: '' });
+  }
+});
+
+app.post('/api/memory/raw', (req, res) => {
+  const { content } = req.body as { content?: string };
+  if (typeof content !== 'string') {
+    res.status(400).json({ error: 'content must be a string' });
+    return;
+  }
+  const file = path.join(config.workspaceRoot, '.jarvis', 'MEMORY.md');
+  fs.writeFileSync(file, content, 'utf-8');
+  res.json({ success: true });
 });
 
 // Voice Endpoints (Ollama frozenlab/qwen3-asr:0.6b)

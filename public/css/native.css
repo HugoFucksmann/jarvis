@@ -589,3 +589,269 @@ html, body {
   background: rgba(0, 240, 255, 0.15);
   color: #fff;
 }
+
+/* Prompt Echo (Clean non-repetitive prompt tag) */
+.stream-prompt-tag {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid var(--color-cyan);
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 6px;
+}
+
+/* ==========================================================================
+   Drawer Panels (Task History & General Memory - Minimizable / Collapsible)
+   ========================================================================== */
+.drawer-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+  animation: fadeIn 0.18s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.drawer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-hud);
+  font-size: 0.82rem;
+  color: var(--color-cyan);
+  letter-spacing: 0.5px;
+}
+
+.drawer-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--color-cyan);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.drawer-close:hover {
+  background: rgba(255, 51, 68, 0.15);
+  color: var(--color-red);
+}
+
+.drawer-action-btn {
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid var(--border-cyan);
+  color: var(--color-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drawer-action-btn:hover {
+  background: var(--color-cyan);
+  color: #050a12;
+}
+
+.drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.drawer-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 40px 0;
+}
+
+/* Task Item Card */
+.task-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.task-item:hover {
+  background: rgba(0, 240, 255, 0.05);
+  border-color: rgba(0, 240, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.task-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-item-prompt {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-item-time {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.task-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.task-tool-tag {
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--color-cyan);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+}
+
+.task-status-tag {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+}
+
+.task-status-tag.ok {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--color-green);
+}
+
+.task-status-tag.fail {
+  background: rgba(255, 51, 68, 0.1);
+  color: var(--color-red);
+}
+
+/* Memory Editor Box */
+.memory-editor-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+}
+
+.memory-textarea {
+  flex: 1;
+  background: rgba(8, 12, 18, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+
+.memory-textarea:focus {
+  border-color: rgba(0, 240, 255, 0.3);
+}
+
+/* Hyperlinks in HUD Responses */
+.hud-link {
+  color: var(--color-cyan);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  word-break: break-all;
+}
+
+.hud-link:hover {
+  color: #fff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+/* Security Rules Box */
+.security-rules-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 250px;
+}
+
+.security-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.security-toggle-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-cyan);
+  cursor: pointer;
+}
+
+.security-help-text {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.security-help-text strong {
+  color: var(--color-gold);
+}
+
+

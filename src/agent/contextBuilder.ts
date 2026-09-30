@@ -1,4 +1,6 @@
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import { MemoryFact } from '../memory/types.js';
 
 export interface SystemContextOptions {
@@ -14,12 +16,27 @@ export class ContextBuilder {
     const hostname = os.hostname();
     const username = os.userInfo().username;
 
+    // 1. Read General Persistent Memory (.jarvis/MEMORY.md)
+    let persistentMemorySection = '';
+    try {
+      const memoryFile = path.join(options.workspaceRoot, '.jarvis', 'MEMORY.md');
+      if (fs.existsSync(memoryFile)) {
+        const memContent = fs.readFileSync(memoryFile, 'utf-8').trim();
+        if (memContent) {
+          persistentMemorySection = `\n## Memoria General Persistente (.jarvis/MEMORY.md):\n${memContent}\n`;
+        }
+      }
+    } catch {
+      // ignore read error
+    }
+
+    // 2. Structured memory facts
     let factsSection = '';
     if (options.longTermFacts && options.longTermFacts.length > 0) {
       const formattedFacts = options.longTermFacts
         .map((f) => `- [${f.category.toUpperCase()}] ${f.content}`)
         .join('\n');
-      factsSection = `\n## Memoria a Largo Plazo Relevante:\n${formattedFacts}\n`;
+      factsSection = `\n## Datos Clave Recordados:\n${formattedFacts}\n`;
     }
 
     return `Eres J.A.R.V.I.S. (Just A Rather Very Intelligent System), un asistente de inteligencia artificial avanzado, autónomo y altamente capaz, diseñado para asistir a tu creador en desarrollo de software, automatización, gestión del sistema operativo y resolución de problemas técnicos complejos.
@@ -32,6 +49,7 @@ export class ContextBuilder {
 - **Directorio de Trabajo (Workspace)**: ${options.workspaceRoot}
 - **Fecha y Hora**: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
 - **Modelo LLM Local Activo**: ${options.modelName} (Ollama)
+${persistentMemorySection}
 ${factsSection}
 ## Directivas Primarias de Comportamiento
 1. **Actitud y Estilo**: Eres cortés, eficiente, conciso y profesional, con el tono sobrio y confiable característico de JARVIS. Responde preferentemente en español salvo que el usuario hable en otro idioma.
@@ -41,13 +59,18 @@ ${factsSection}
    - Si se requieren múltiples pasos, ejecuta secuencialmente las herramientas necesarias.
    - Analiza el resultado de cada herramienta.
    - Si una herramienta produce un error, razona sobre el fallo, corrígelo e intenta un camino alternativo.
-4. **Seguridad y Responsabilidad**:
+4. **Memoria Persistente**:
+   - Tienes acceso a la herramienta \`manage_memory\` para leer, agregar o actualizar información clave en tu archivo de memoria general (\`.jarvis/MEMORY.md\`).
+   - Si el usuario te pide recordar algo personal, una preferencia, o un dato importante de un proyecto, guárdalo usando \`manage_memory\` para no olvidarlo nunca entre chats.
+5. **No Repetir Información (Estricto)**:
+   - Sé directo y conciso.
+   - NUNCA repitas la orden o pregunta del usuario como encabezado ni en la respuesta.
+   - NO repitas explicaciones que ya diste en el mismo turno.
+   - Si una tarea ya fue ejecutada, comunica el resultado de inmediato sin preámbulos innecesarios.
+6. **Seguridad y Responsabilidad**:
    - Todo acceso al sistema debe pasar a través de tus herramientas registradas.
    - No ejecutes comandos destructivos sin necesidad real.
    - Si una acción sensible requiere confirmación, explica claramente al usuario la razón antes de proceder.
-5. **Calidad de Respuesta**:
-   - Sé claro y conciso en tu respuesta final.
-   - Resume las acciones realizadas y los resultados obtenidos sin verborrea innecesaria.
 `;
   }
 }

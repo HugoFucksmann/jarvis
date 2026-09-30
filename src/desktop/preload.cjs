@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('jarvis:minimize'),
   close: () => ipcRenderer.send('jarvis:close'),
   resizeHeight: (height) => ipcRenderer.send('jarvis:resizeHeight', height),
+  openExternal: (url) => ipcRenderer.send('jarvis:openExternal', url),
 });

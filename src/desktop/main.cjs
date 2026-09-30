@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
 const path = require('path');
 
 let mainWindow = null;
@@ -47,11 +47,30 @@ function createWindow() {
     console.error('Error cargando la interfaz nativa:', err);
   });
 
+  // Handle external link clicks in native browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F5' || (input.control && input.key.toLowerCase() === 'r')) {
+      mainWindow.reload();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
   // Window IPC handlers
+  ipcMain.on('jarvis:openExternal', (_event, targetUrl) => {
+    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      shell.openExternal(targetUrl);
+    }
+  });
   ipcMain.on('jarvis:hide', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.hide();

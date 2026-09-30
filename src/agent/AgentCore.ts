@@ -8,6 +8,7 @@ import { AgentEvent, AgentTaskRequest, AgentTaskResult } from './types.js';
 import { config, updateModelConfig } from '../config/index.js';
 import { Logger } from '../logger/Logger.js';
 import { RiskLevel } from '../tools/types.js';
+import { TaskHistory } from './TaskHistory.js';
 
 // Import built-in tools
 import { GetCurrentTimeTool, GetSystemInfoTool } from '../tools/builtins/systemTools.js';
@@ -22,12 +23,14 @@ import {
 import { RunCommandTool, GetProcessesTool } from '../tools/builtins/terminalTools.js';
 import { OpenUrlTool, OpenApplicationTool } from '../tools/builtins/browserTools.js';
 import { WebSearchTool } from '../tools/builtins/webSearchTools.js';
+import { ManageMemoryTool } from '../tools/builtins/memoryTools.js';
 
 export class AgentCore {
   private llm: LLMProvider;
   private tools: ToolRegistry;
   private memory: MemoryStore;
   private permissionManager: PermissionManager;
+  private taskHistory: TaskHistory;
   private activeTasks: Map<string, AbortController> = new Map();
   private logger = new Logger('AgentCore');
 
@@ -43,8 +46,9 @@ export class AgentCore {
     // 3. Initialize Tool Registry
     this.tools = new ToolRegistry(this.permissionManager);
 
-    // 4. Initialize Memory Store
+    // 4. Initialize Memory Store & Task History
     this.memory = new MemoryStore(config.workspaceRoot);
+    this.taskHistory = new TaskHistory(config.workspaceRoot);
 
     // 5. Register all built-in tools
     this.registerBuiltinTools();
@@ -77,6 +81,9 @@ export class AgentCore {
     if (config.features.webSearchEnabled) {
       this.tools.registerTool(new WebSearchTool());
     }
+
+    // Persistent cross-chat memory tool
+    this.tools.registerTool(new ManageMemoryTool());
   }
 
   public getLLM(): LLMProvider {
@@ -89,6 +96,10 @@ export class AgentCore {
 
   public getMemory(): MemoryStore {
     return this.memory;
+  }
+
+  public getTaskHistory(): TaskHistory {
+    return this.taskHistory;
   }
 
   public getPermissionManager(): PermissionManager {
@@ -122,6 +133,7 @@ export class AgentCore {
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const abortController = new AbortController();
     this.activeTasks.set(taskId, abortController);
+    const toolsUsed: string[] = [];
 
     const agentLoop = new AgentLoop({
       llm: this.llm,
@@ -130,7 +142,14 @@ export class AgentCore {
       workspaceRoot: config.workspaceRoot,
       maxIterations: config.agent.maxIterations,
       timeoutSeconds: config.agent.timeoutSeconds,
-      onEvent: callbacks?.onEvent,
+      onEvent: (event) => {
+        if (event.type === 'tool_call_start') {
+          if (!toolsUsed.includes(event.toolName)) {
+            toolsUsed.push(event.toolName);
+          }
+        }
+        callbacks?.onEvent?.(event);
+      },
       requestApproval: callbacks?.requestApproval,
     });
 
@@ -142,7 +161,19 @@ export class AgentCore {
     };
 
     try {
-      return await agentLoop.run(taskRequest);
+      const result = await agentLoop.run(taskRequest);
+      // Record task into persistent history
+      this.taskHistory.recordTask({
+        id: taskId,
+        timestamp: new Date().toISOString(),
+        prompt,
+        success: result.success,
+        toolCallsCount: result.toolCallsCount,
+        toolsUsed,
+        durationMs: result.durationMs,
+        summary: result.response.slice(0, 160).replace(/\n/g, ' '),
+      });
+      return result;
     } finally {
       this.activeTasks.delete(taskId);
     }

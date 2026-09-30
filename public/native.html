@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="css/native.css">
 </head>
 <body class="native-body">
-  <div class="jarvis-window" id="jarvis-container">
+  <div class="jarvis-window" id="jarvis-container" data-mode="idle">
     
     <!-- Top Command Bar (Draggable) -->
     <header class="command-bar" id="drag-handle">
@@ -46,6 +46,28 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
             <line x1="12" y1="19" x2="12" y2="23"/>
             <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+
+        <!-- Task History Button (Minimizable drawer) -->
+        <button id="btn-toggle-history" class="action-btn" title="Historial de tareas realizadas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </button>
+
+        <!-- General Memory Button -->
+        <button id="btn-toggle-memory" class="action-btn" title="Memoria persistente (.jarvis/MEMORY.md)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+        </button>
+
+        <!-- Security Rules Button (Restricted Commands list) -->
+        <button id="btn-toggle-security" class="action-btn" title="Permisos y comandos restringidos (.jarvis/permissions.json)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
         </button>
 
@@ -92,7 +114,7 @@
       </div>
     </div>
 
-    <!-- Main Content Area: Idle Suggestions or Fluid Response Stream -->
+    <!-- Main Content Area: Idle Suggestions, Fluid Response, History or Memory -->
     <main class="content-area" id="content-area">
       <!-- Empty / Idle State -->
       <div class="idle-state" id="idle-state">
@@ -106,6 +128,7 @@
 
       <!-- Response Stream (Appears seamlessly without nested boxes) -->
       <div class="stream-panel" id="response-panel" style="display: none;">
+        <div class="stream-prompt-tag" id="stream-prompt"></div>
         <div class="stream-content" id="response-body"></div>
         <div class="stream-actions">
           <button id="btn-copy-response" class="stream-btn" title="Copiar al portapapeles">
@@ -124,11 +147,64 @@
           </button>
         </div>
       </div>
+
+      <!-- Task History Panel (Minimizable / Collapsible) -->
+      <div class="drawer-panel" id="history-drawer" style="display: none;">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <span>📋 Tareas Realizadas</span>
+            <span class="drawer-badge" id="history-count">0 tareas</span>
+          </div>
+          <button id="btn-close-history" class="drawer-close" title="Ocultar historial">✕</button>
+        </div>
+        <div class="drawer-list" id="history-list">
+          <div class="drawer-empty">No hay tareas registradas aún.</div>
+        </div>
+      </div>
+
+      <!-- General Persistent Memory Panel -->
+      <div class="drawer-panel" id="memory-drawer" style="display: none;">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <span>🧠 Memoria Persistente (.jarvis/MEMORY.md)</span>
+          </div>
+          <div class="drawer-header-actions">
+            <button id="btn-save-memory" class="drawer-action-btn" title="Guardar cambios">Guardar</button>
+            <button id="btn-close-memory" class="drawer-close" title="Ocultar memoria">✕</button>
+          </div>
+        </div>
+        <div class="memory-editor-box">
+          <textarea id="memory-editor" class="memory-textarea" spellcheck="false" placeholder="Cargando memoria..."></textarea>
+        </div>
+      </div>
+
+      <!-- Security & Permissions Panel (Configurable Restricted Commands) -->
+      <div class="drawer-panel" id="security-drawer" style="display: none;">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <span>🛡️ Permisos y Comandos Restringidos (.jarvis/permissions.json)</span>
+          </div>
+          <div class="drawer-header-actions">
+            <button id="btn-save-security" class="drawer-action-btn" title="Guardar reglas">Guardar</button>
+            <button id="btn-close-security" class="drawer-close" title="Ocultar seguridad">✕</button>
+          </div>
+        </div>
+        <div class="security-rules-box">
+          <label class="security-toggle-label">
+            <input type="checkbox" id="chk-auto-approve" checked />
+            <span>Auto-aprobar comandos comunes en consola (sin pedir autorización previa)</span>
+          </label>
+          <div class="security-help-text">
+            Los siguientes comandos y palabras clave <strong>SIEMPRE requerirán tu autorización</strong> (uno por línea):
+          </div>
+          <textarea id="security-patterns-editor" class="memory-textarea" spellcheck="false" placeholder="del&#10;rmdir&#10;remove-item&#10;format..."></textarea>
+        </div>
+      </div>
     </main>
 
     <!-- Subtle Floating Footer -->
     <footer class="command-footer">
-      <div class="footer-hint">
+      <div class="footer-hint" id="footer-hint">
         <span><kbd>Alt</kbd> + <kbd>Espacio</kbd> invocar</span>
         <span><kbd>Esc</kbd> ocultar</span>
       </div>
