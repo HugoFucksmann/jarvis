@@ -40,6 +40,18 @@ export class MemoryStore implements IMemoryStore {
     return this.longTerm.deleteFact(id);
   }
 
+  public async getRawPersistentMemory(): Promise<string> {
+    return this.longTerm.getRawContent();
+  }
+
+  public async saveRawPersistentMemory(content: string): Promise<void> {
+    this.longTerm.saveRawContent(content);
+  }
+
+  public async appendPersistentNote(content: string, section?: string): Promise<void> {
+    this.longTerm.appendNote(content, section);
+  }
+
   // Prepared for Vector DB embeddings
   public async searchSimilar(query: string, limit: number = 5): Promise<MemoryFact[]> {
     return this.longTerm.query(query).slice(0, limit);

@@ -10,20 +10,7 @@ import { Logger } from '../logger/Logger.js';
 import { RiskLevel } from '../tools/types.js';
 import { TaskHistory } from './TaskHistory.js';
 
-// Import built-in tools
-import { GetCurrentTimeTool, GetSystemInfoTool } from '../tools/builtins/systemTools.js';
-import {
-  ListFilesTool,
-  ReadFileTool,
-  WriteFileTool,
-  EditFileTool,
-  SearchFilesTool,
-  DeleteFileTool,
-} from '../tools/builtins/fileTools.js';
-import { RunCommandTool, GetProcessesTool } from '../tools/builtins/terminalTools.js';
-import { OpenUrlTool, OpenApplicationTool } from '../tools/builtins/browserTools.js';
-import { WebSearchTool } from '../tools/builtins/webSearchTools.js';
-import { ManageMemoryTool } from '../tools/builtins/memoryTools.js';
+import { getBuiltinTools } from '../tools/builtins/index.js';
 
 export class AgentCore {
   private llm: LLMProvider;
@@ -57,33 +44,10 @@ export class AgentCore {
   }
 
   private registerBuiltinTools(): void {
-    // System tools
-    this.tools.registerTool(new GetCurrentTimeTool());
-    this.tools.registerTool(new GetSystemInfoTool());
-
-    // File tools
-    this.tools.registerTool(new ListFilesTool());
-    this.tools.registerTool(new ReadFileTool());
-    this.tools.registerTool(new WriteFileTool());
-    this.tools.registerTool(new EditFileTool());
-    this.tools.registerTool(new SearchFilesTool());
-    this.tools.registerTool(new DeleteFileTool());
-
-    // Terminal tools
-    this.tools.registerTool(new RunCommandTool());
-    this.tools.registerTool(new GetProcessesTool());
-
-    // Browser tools
-    this.tools.registerTool(new OpenUrlTool());
-    this.tools.registerTool(new OpenApplicationTool());
-
-    // Web search
-    if (config.features.webSearchEnabled) {
-      this.tools.registerTool(new WebSearchTool());
+    const builtinTools = getBuiltinTools();
+    for (const tool of builtinTools) {
+      this.tools.registerTool(tool);
     }
-
-    // Persistent cross-chat memory tool
-    this.tools.registerTool(new ManageMemoryTool());
   }
 
   public getLLM(): LLMProvider {
@@ -142,6 +106,7 @@ export class AgentCore {
       workspaceRoot: config.workspaceRoot,
       maxIterations: config.agent.maxIterations,
       timeoutSeconds: config.agent.timeoutSeconds,
+      thinking: config.ollama.thinking,
       onEvent: (event) => {
         if (event.type === 'tool_call_start') {
           if (!toolsUsed.includes(event.toolName)) {

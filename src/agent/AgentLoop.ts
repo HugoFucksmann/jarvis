@@ -10,7 +10,6 @@ import {
 } from './types.js';
 import { ContextBuilder } from './contextBuilder.js';
 import { RiskLevel } from '../tools/types.js';
-import { config } from '../config/index.js';
 
 export interface AgentLoopOptions {
   llm: LLMProvider;
@@ -19,6 +18,7 @@ export interface AgentLoopOptions {
   workspaceRoot: string;
   maxIterations?: number;
   timeoutSeconds?: number;
+  thinking?: boolean;
   onEvent?: (event: AgentEvent) => void;
   requestApproval?: (toolName: string, args: Record<string, unknown>, risk: RiskLevel, reason: string) => Promise<boolean>;
 }
@@ -30,6 +30,7 @@ export class AgentLoop {
   private workspaceRoot: string;
   private maxIterations: number;
   private timeoutSeconds: number;
+  private thinking: boolean;
   private onEvent?: (event: AgentEvent) => void;
   private requestApproval?: (toolName: string, args: Record<string, unknown>, risk: RiskLevel, reason: string) => Promise<boolean>;
   private logger = new Logger('AgentLoop');
@@ -41,6 +42,7 @@ export class AgentLoop {
     this.workspaceRoot = options.workspaceRoot;
     this.maxIterations = options.maxIterations || 15;
     this.timeoutSeconds = options.timeoutSeconds || 180;
+    this.thinking = options.thinking ?? false;
     this.onEvent = options.onEvent;
     this.requestApproval = options.requestApproval;
   }
@@ -134,7 +136,7 @@ export class AgentLoop {
             {
               tools: toolDefinitions,
               temperature: 0.1,
-              think: config.ollama.thinking,
+              think: this.thinking,
               signal: timeoutController.signal,
             },
             {

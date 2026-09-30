@@ -92,6 +92,12 @@ export class OllamaProvider implements LLMProvider {
       if (m.tool_calls && m.tool_calls.length > 0) {
         msg.tool_calls = m.tool_calls;
       }
+      if (m.tool_call_id) {
+        msg.tool_call_id = m.tool_call_id;
+      }
+      if (m.name) {
+        msg.name = m.name;
+      }
       return msg;
     });
 
@@ -196,16 +202,29 @@ export class OllamaProvider implements LLMProvider {
                     parsedArgs = tc.function.arguments as Record<string, unknown>;
                   }
 
-                  const standardizedToolCall: ToolCall = {
-                    id: tc.id || `call_${Math.random().toString(36).substring(2, 10)}`,
-                    function: {
-                      name: tc.function?.name || '',
-                      arguments: parsedArgs,
-                    },
-                  };
+                  const callName = tc.function?.name || '';
+                  const callId = tc.id || `call_${Math.random().toString(36).substring(2, 10)}`;
 
-                  accumulatedToolCalls.push(standardizedToolCall);
-                  callbacks?.onToolCall?.(standardizedToolCall);
+                  // Prevent duplicate tool calls if repeated across stream chunks
+                  const alreadyExists = accumulatedToolCalls.some((existing) => {
+                    if (tc.id && existing.id === tc.id) return true;
+                    return (
+                      existing.function.name === callName &&
+                      JSON.stringify(existing.function.arguments) === JSON.stringify(parsedArgs)
+                    );
+                  });
+
+                  if (!alreadyExists) {
+                    const standardizedToolCall: ToolCall = {
+                      id: callId,
+                      function: {
+                        name: callName,
+                        arguments: parsedArgs,
+                      },
+                    };
+                    accumulatedToolCalls.push(standardizedToolCall);
+                    callbacks?.onToolCall?.(standardizedToolCall);
+                  }
                 }
               }
             }

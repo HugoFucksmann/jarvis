@@ -3,39 +3,70 @@ import path from 'path';
 import { MemoryFact } from './types.js';
 import { Logger } from '../logger/Logger.js';
 
+/**
+ * LongTermMemory — Unified persistent memory manager backed exclusively
+ * by `.jarvis/MEMORY.md`. Eliminates split-brain inconsistency with separate JSON files.
+ */
 export class LongTermMemory {
-  private facts: MemoryFact[] = [];
   private filePath: string;
   private logger = new Logger('LongTermMemory');
 
   constructor(workspaceRoot: string) {
-    const memoryDir = path.join(workspaceRoot, '.jarvis', 'memory');
-    if (!fs.existsSync(memoryDir)) {
-      fs.mkdirSync(memoryDir, { recursive: true });
+    const jarvisDir = path.join(workspaceRoot, '.jarvis');
+    if (!fs.existsSync(jarvisDir)) {
+      fs.mkdirSync(jarvisDir, { recursive: true });
     }
-    this.filePath = path.join(memoryDir, 'facts.json');
-    this.load();
+    this.filePath = path.join(jarvisDir, 'MEMORY.md');
+    this.ensureInitialized();
   }
 
-  private load(): void {
+  private ensureInitialized(): void {
+    if (!fs.existsSync(this.filePath)) {
+      const initialContent = `# J.A.R.V.I.S. — Memoria General Persistente\n\n`;
+      fs.writeFileSync(this.filePath, initialContent, 'utf-8');
+      this.logger.info(`Initialized persistent memory at ${this.filePath}`);
+    }
+  }
+
+  public getRawContent(): string {
     try {
       if (fs.existsSync(this.filePath)) {
-        const raw = fs.readFileSync(this.filePath, 'utf-8');
-        this.facts = JSON.parse(raw);
-        this.logger.debug(`Loaded ${this.facts.length} long-term facts.`);
+        return fs.readFileSync(this.filePath, 'utf-8');
       }
     } catch (err) {
-      this.logger.error(`Failed to load long-term facts: ${String(err)}`);
-      this.facts = [];
+      this.logger.error(`Failed to read MEMORY.md: ${String(err)}`);
+    }
+    return '';
+  }
+
+  public saveRawContent(content: string): void {
+    try {
+      fs.writeFileSync(this.filePath, content, 'utf-8');
+      this.logger.debug(`Saved MEMORY.md (${content.length} chars)`);
+    } catch (err) {
+      this.logger.error(`Failed to save MEMORY.md: ${String(err)}`);
     }
   }
 
-  private save(): void {
-    try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.facts, null, 2), 'utf-8');
-    } catch (err) {
-      this.logger.error(`Failed to save long-term facts: ${String(err)}`);
+  public appendNote(note: string, section?: string): void {
+    const trimmed = note.trim();
+    if (!trimmed) return;
+    let current = this.getRawContent();
+    if (!current.trim()) {
+      current = '# J.A.R.V.I.S. — Memoria General Persistente\n';
     }
+
+    if (section) {
+      const sectionHeader = `### ${section}`;
+      if (current.includes(sectionHeader)) {
+        current = current.replace(sectionHeader, `${sectionHeader}\n- ${trimmed}`);
+      } else {
+        current += `\n${sectionHeader}\n- ${trimmed}\n`;
+      }
+    } else {
+      current += `\n- ${trimmed}\n`;
+    }
+    this.saveRawContent(current);
   }
 
   /**
@@ -54,39 +85,67 @@ export class LongTermMemory {
 
   public addFact(category: MemoryFact['category'], content: string): MemoryFact | null {
     if (this.isSensitive(content)) {
-      this.logger.warn('Blocked attempt to store potentially sensitive information in long-term memory.');
+      this.logger.warn('Blocked attempt to store potentially sensitive information in memory.');
       return null;
     }
 
-    // Check for duplicates
-    const existing = this.facts.find((f) => f.content.toLowerCase() === content.toLowerCase());
-    if (existing) {
-      existing.updatedAt = new Date().toISOString();
-      this.save();
-      return existing;
-    }
+    const sectionName =
+      category === 'preference'
+        ? 'Preferencias'
+        : category === 'project'
+        ? 'Proyectos'
+        : category === 'environment'
+        ? 'Entorno'
+        : 'Notas';
 
-    const newFact: MemoryFact = {
-      id: `fact_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    this.appendNote(content, sectionName);
+
+    const fact: MemoryFact = {
+      id: `fact_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       category,
       content,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    this.facts.push(newFact);
-    this.save();
-    this.logger.info(`Stored new long-term fact: [${category}] ${content.substring(0, 60)}...`);
-    return newFact;
+    this.logger.info(`Stored persistent memory under [${sectionName}]: ${content.substring(0, 60)}...`);
+    return fact;
   }
 
   public query(queryText?: string, category?: string): MemoryFact[] {
-    let result = [...this.facts];
+    const content = this.getRawContent();
+    const lines = content.split('\n');
+    const facts: MemoryFact[] = [];
+    let currentCategory: MemoryFact['category'] = 'general';
 
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('###')) {
+        const lowerHeader = line.toLowerCase();
+        if (lowerHeader.includes('pref')) currentCategory = 'preference';
+        else if (lowerHeader.includes('proy') || lowerHeader.includes('proj')) currentCategory = 'project';
+        else if (lowerHeader.includes('entorn') || lowerHeader.includes('env')) currentCategory = 'environment';
+        else currentCategory = 'general';
+        continue;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const text = line.substring(2).trim();
+        if (text) {
+          facts.push({
+            id: `line_${i}`,
+            category: currentCategory,
+            content: text,
+            createdAt: '',
+            updatedAt: '',
+          });
+        }
+      }
+    }
+
+    let result = facts;
     if (category) {
       result = result.filter((f) => f.category === category);
     }
-
     if (queryText && queryText.trim()) {
       const terms = queryText.toLowerCase().split(/\s+/);
       result = result.filter((f) => {
@@ -99,16 +158,20 @@ export class LongTermMemory {
   }
 
   public deleteFact(id: string): boolean {
-    const initialLen = this.facts.length;
-    this.facts = this.facts.filter((f) => f.id !== id);
-    if (this.facts.length !== initialLen) {
-      this.save();
-      return true;
+    if (id.startsWith('line_')) {
+      const lineIdx = parseInt(id.replace('line_', ''), 10);
+      const content = this.getRawContent();
+      const lines = content.split('\n');
+      if (lineIdx >= 0 && lineIdx < lines.length) {
+        lines.splice(lineIdx, 1);
+        this.saveRawContent(lines.join('\n'));
+        return true;
+      }
     }
     return false;
   }
 
   public getAll(): MemoryFact[] {
-    return [...this.facts];
+    return this.query();
   }
 }

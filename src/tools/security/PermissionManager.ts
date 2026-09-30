@@ -36,6 +36,28 @@ export class PermissionManager {
     this.permissionsFilePath = path.join(jarvisDir, 'permissions.json');
 
     this.securityRules = this.loadSecurityRules();
+    this.loadAuditLog();
+  }
+
+  private loadAuditLog(): void {
+    try {
+      if (fs.existsSync(this.auditFilePath)) {
+        const raw = fs.readFileSync(this.auditFilePath, 'utf-8');
+        const lines = raw.trim().split('\n').filter(Boolean);
+        this.auditLog = lines
+          .slice(-100)
+          .map((line) => {
+            try {
+              return JSON.parse(line) as AuditLogEntry;
+            } catch {
+              return null;
+            }
+          })
+          .filter((entry): entry is AuditLogEntry => entry !== null);
+      }
+    } catch (err) {
+      this.logger.error(`Failed to load historical audit log: ${String(err)}`);
+    }
   }
 
   /**
@@ -126,6 +148,21 @@ export class PermissionManager {
       return {
         riskLevel: RiskLevel.HIGH,
         reason: `La herramienta "${tool.name}" está explícitamente en la lista de autorización requerida.`,
+      };
+    }
+
+    // Dynamic evaluation for power management
+    if (tool.name === 'manage_power') {
+      const action = typeof args.action === 'string' ? args.action.toLowerCase() : '';
+      if (action === 'lock') {
+        return {
+          riskLevel: RiskLevel.LOW,
+          reason: 'Bloqueo de pantalla de Windows (acción reversible de inmediato).',
+        };
+      }
+      return {
+        riskLevel: RiskLevel.HIGH,
+        reason: `La acción de energía "${action.toUpperCase()}" suspenderá, reiniciará o apagará el sistema.`,
       };
     }
 

@@ -18,6 +18,10 @@ export interface IMemoryStore {
   queryLongTermFacts(query?: string, category?: string): Promise<MemoryFact[]>;
   deleteLongTermFact(id: string): Promise<boolean>;
 
+  getRawPersistentMemory(): Promise<string>;
+  saveRawPersistentMemory(content: string): Promise<void>;
+  appendPersistentNote(content: string, section?: string): Promise<void>;
+
   // Vector embedding hook for future RAG extension
   searchSimilar?(query: string, limit?: number): Promise<MemoryFact[]>;
 }

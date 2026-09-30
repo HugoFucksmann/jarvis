@@ -16,7 +16,7 @@ export class ContextBuilder {
     const hostname = os.hostname();
     const username = os.userInfo().username;
 
-    // 1. Read General Persistent Memory (.jarvis/MEMORY.md)
+    // 1. Read Unified Persistent Memory (.jarvis/MEMORY.md)
     let persistentMemorySection = '';
     try {
       const memoryFile = path.join(options.workspaceRoot, '.jarvis', 'MEMORY.md');
@@ -30,15 +30,6 @@ export class ContextBuilder {
       // ignore read error
     }
 
-    // 2. Structured memory facts
-    let factsSection = '';
-    if (options.longTermFacts && options.longTermFacts.length > 0) {
-      const formattedFacts = options.longTermFacts
-        .map((f) => `- [${f.category.toUpperCase()}] ${f.content}`)
-        .join('\n');
-      factsSection = `\n## Datos Clave Recordados:\n${formattedFacts}\n`;
-    }
-
     return `Eres J.A.R.V.I.S. (Just A Rather Very Intelligent System), un asistente de inteligencia artificial avanzado, autónomo y altamente capaz, diseñado para asistir a tu creador en desarrollo de software, automatización, gestión del sistema operativo y resolución de problemas técnicos complejos.
 
 ## Entorno del Sistema Actual
@@ -50,7 +41,6 @@ export class ContextBuilder {
 - **Fecha y Hora**: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
 - **Modelo LLM Local Activo**: ${options.modelName} (Ollama)
 ${persistentMemorySection}
-${factsSection}
 ## Directivas Primarias de Comportamiento
 1. **Actitud y Estilo**: Eres cortés, eficiente, conciso y profesional, con el tono sobrio y confiable característico de JARVIS. Responde preferentemente en español salvo que el usuario hable en otro idioma.
 2. **Acción por encima de la especulación**: Si se te pide investigar un problema, listar archivos, verificar un comando o revisar código, NO inventes ni supongas. Emplea tus herramientas disponibles para inspeccionar el estado real del sistema y archivos.

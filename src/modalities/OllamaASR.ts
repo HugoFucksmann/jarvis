@@ -3,20 +3,35 @@ import { Logger } from '../logger/Logger.js';
 
 export type VoiceComputeDevice = 'cpu' | 'gpu';
 
+export interface OllamaASROptions {
+  numThreads?: number;
+  keepAlive?: string;
+  numPredict?: number;
+  numCtx?: number;
+}
+
 export class OllamaASR implements SpeechToText {
   private baseUrl: string;
   private modelName: string;
   private device: VoiceComputeDevice;
+  private options: Required<OllamaASROptions>;
   private logger = new Logger('OllamaASR');
 
   constructor(
     baseUrl: string = 'http://127.0.0.1:11434',
     modelName: string = 'frozenlab/qwen3-asr:0.6b',
-    initialDevice: VoiceComputeDevice = 'cpu'
+    initialDevice: VoiceComputeDevice = 'cpu',
+    options?: OllamaASROptions
   ) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.modelName = modelName;
     this.device = initialDevice;
+    this.options = {
+      numThreads: options?.numThreads ?? 8,
+      keepAlive: options?.keepAlive ?? '60m',
+      numPredict: options?.numPredict ?? 128,
+      numCtx: options?.numCtx ?? 2048,
+    };
   }
 
   public getDevice(): VoiceComputeDevice {
@@ -123,12 +138,12 @@ export class OllamaASR implements SpeechToText {
             },
           ],
           stream: false,
-          keep_alive: '60m',
+          keep_alive: this.options.keepAlive,
           options: {
             num_gpu: numGpu,
-            num_thread: 8,
-            num_predict: 128,
-            num_ctx: 2048,
+            num_thread: this.options.numThreads,
+            num_predict: this.options.numPredict,
+            num_ctx: this.options.numCtx,
             temperature: 0.0,
           },
         }),
