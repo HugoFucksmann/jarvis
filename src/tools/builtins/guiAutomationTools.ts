@@ -1,47 +1,6 @@
 import { BaseTool } from '../Tool.js';
 import { RiskLevel, ToolExecutionContext, ToolResult } from '../types.js';
-import { spawn } from 'child_process';
-
-/**
- * Helper to run a PowerShell script safely via UTF-16LE Base64 -EncodedCommand
- */
-function runPowerShellScript(script: string, timeoutMs: number = 6000): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const fullScript = `$ProgressPreference = 'SilentlyContinue'\n${script}`;
-    const encoded = Buffer.from(fullScript, 'utf16le').toString('base64');
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (d) => {
-      stdout += d.toString();
-    });
-
-    child.stderr.on('data', (d) => {
-      stderr += d.toString();
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ stdout, stderr: 'Execution timed out', code: -1 });
-    }, timeoutMs);
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: code ?? 0 });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr: err.message, code: -1 });
-    });
-  });
-}
+import { runPowerShell } from './_powershellHelper.js';
 
 export class InputSimulationTool extends BaseTool {
   readonly name = 'simulate_input';
@@ -128,7 +87,7 @@ ${escaped}
 '@)
         `;
 
-        const { code, stderr } = await runPowerShellScript(script);
+        const { code, stderr } = await runPowerShell(script);
         if (code !== 0) {
           return { success: false, error: `Fallo al tipear texto: ${stderr}` };
         }
@@ -158,7 +117,7 @@ ${escaped}
           $wsh.SendKeys('${sendKeySequence}')
         `;
 
-        const { code, stderr } = await runPowerShellScript(script);
+        const { code, stderr } = await runPowerShell(script);
         if (code !== 0) {
           return { success: false, error: `Fallo al presionar tecla: ${stderr}` };
         }
@@ -227,7 +186,7 @@ ${escaped}
           ${clickCode}
         `;
 
-        const { code, stderr } = await runPowerShellScript(script);
+        const { code, stderr } = await runPowerShell(script);
         if (code !== 0) {
           return { success: false, error: `Fallo en acción de mouse: ${stderr}` };
         }

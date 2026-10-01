@@ -1,75 +1,7 @@
 import { BaseTool } from '../Tool.js';
 import { RiskLevel, ToolExecutionContext, ToolResult, ActionState } from '../types.js';
-import { spawn } from 'child_process';
-
-/**
- * Runs a PowerShell script safely via UTF-16LE Base64 -EncodedCommand.
- */
-function runPowerShell(script: string, timeoutMs: number = 6000): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const fullScript = `$ProgressPreference = 'SilentlyContinue'\n${script}`;
-    const encoded = Buffer.from(fullScript, 'utf16le').toString('base64');
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (d) => {
-      stdout += d.toString();
-    });
-
-    child.stderr.on('data', (d) => {
-      stderr += d.toString();
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ stdout, stderr: 'Execution timed out', code: -1 });
-    }, timeoutMs);
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: code ?? 0 });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr: err.message, code: -1 });
-    });
-  });
-}
-
-function openUrlCrossPlatform(url: string): Promise<void> {
-  return new Promise((resolve) => {
-    try {
-      if (process.platform === 'win32') {
-        // cmd /c start is the canonical Windows method to open URLs in the default browser.
-        // Start-Process -FilePath does NOT work for URLs (expects a file path).
-        const child = spawn('cmd.exe', ['/c', 'start', '""', url], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-        });
-        child.unref();
-        resolve();
-      } else if (process.platform === 'darwin') {
-        const child = spawn('open', [url], { detached: true, stdio: 'ignore' });
-        child.unref();
-        resolve();
-      } else {
-        const child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
-        child.unref();
-        resolve();
-      }
-    } catch {
-      resolve();
-    }
-  });
-}
+import { runPowerShell } from './_powershellHelper.js';
+import { openUrlInBrowser } from '../../utils/openUrl.js';
 
 /**
  * Searches YouTube directly and returns the first direct watch URL found
@@ -221,7 +153,7 @@ try {
           };
         } else {
           // Web fallback
-          await openUrlCrossPlatform(webUrl);
+          await openUrlInBrowser(webUrl);
           return {
             success: true,
             state: 'requested' as ActionState,
@@ -251,7 +183,7 @@ try {
         const found = await searchYouTubeDirect(query, isMusic);
 
         // Step 2: open the direct video (or results fallback)
-        await openUrlCrossPlatform(found.url);
+        await openUrlInBrowser(found.url);
 
         const serviceName = isMusic ? 'YouTube Music' : 'YouTube';
         const isDirectVideo = found.videoId !== null;

@@ -64,6 +64,9 @@ export class ContextBuilder {
     const platform = os.platform();
     const hostname = os.hostname();
     const username = os.userInfo().username;
+    const homeDir = os.homedir();
+    const userProfile = process.env.USERPROFILE || homeDir;
+    const desktopPath = path.join(userProfile, 'Desktop');
 
     // 1. Read Unified Persistent Memory (.jarvis/MEMORY.md) ONLY if requested
     let persistentMemorySection = '';
@@ -88,6 +91,9 @@ export class ContextBuilder {
 - **Shell**: PowerShell (Windows Terminal)
 - **Usuario**: ${username}
 - **Hostname**: ${hostname}
+- **Carpeta de usuario (USERPROFILE)**: ${userProfile}
+- **Directorio Home**: ${homeDir}
+- **Escritorio (Desktop)**: ${desktopPath}
 - **Directorio de Trabajo (Workspace)**: ${options.workspaceRoot}
 - **Fecha y Hora**: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
 - **Modelo LLM Local Activo**: ${options.modelName} (Ollama)

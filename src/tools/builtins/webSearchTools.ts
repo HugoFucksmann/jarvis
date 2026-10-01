@@ -80,6 +80,21 @@ export class WebSearchTool extends BaseTool {
     }
   }
 
+  /** Strips HTML tags and decodes common HTML entities from a text snippet. */
+  private cleanHtml(text: string): string {
+    return text
+      .replace(/<[^>]+>/g, '')
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code))
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   private async searchBing(
     query: string,
     maxResults: number,
@@ -100,16 +115,6 @@ export class WebSearchTool extends BaseTool {
       if (!res.ok) return [];
 
       const html = await res.text();
-      const clean = (text: string) =>
-        text
-          .replace(/<[^>]+>/g, '')
-          .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code))
-          .replace(/&amp;/g, '&')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&nbsp;/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
 
       const results: Array<{ title: string; snippet: string; url: string }> = [];
       const blocks = html.split('<li class="b_algo"');
@@ -127,9 +132,9 @@ export class WebSearchTool extends BaseTool {
           } catch {}
         }
 
-        const title = clean(h2Match[2]);
+        const title = this.cleanHtml(h2Match[2]);
         const pMatch = /<p[^>]*>([\s\S]*?)<\/p>/i.exec(block);
-        const snippet = pMatch ? clean(pMatch[1]) : '';
+        const snippet = pMatch ? this.cleanHtml(pMatch[1]) : '';
 
         if (title && finalUrl.startsWith('http')) {
           results.push({ title, snippet, url: finalUrl });
@@ -198,17 +203,6 @@ export class WebSearchTool extends BaseTool {
     html: string,
     maxResults: number
   ): Array<{ title: string; snippet: string; url: string }> {
-    const clean = (text: string) =>
-      text
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/\s+/g, ' ')
-        .trim();
-
     const results: Array<{ title: string; snippet: string; url: string }> = [];
 
     // DuckDuckGo splits result items with class "result results_links ..."
@@ -237,10 +231,10 @@ export class WebSearchTool extends BaseTool {
 
       // Snippet (contained within <a class="result__snippet" ...>...</a>)
       const snippetMatch = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i.exec(chunk);
-      const snippet = snippetMatch ? clean(snippetMatch[1]) : '';
+      const snippet = snippetMatch ? this.cleanHtml(snippetMatch[1]) : '';
 
       results.push({
-        title: clean(titleMatch[2]),
+        title: this.cleanHtml(titleMatch[2]),
         snippet,
         url: finalUrl,
       });

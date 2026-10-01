@@ -1,47 +1,6 @@
 import { BaseTool } from '../Tool.js';
 import { RiskLevel, ToolExecutionContext, ToolResult } from '../types.js';
-import { spawn } from 'child_process';
-
-/**
- * Helper to run a PowerShell script reliably via UTF-16LE Base64 -EncodedCommand
- */
-function runPowerShell(script: string, timeoutMs: number = 8000): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const fullScript = `$ProgressPreference = 'SilentlyContinue'\n${script}`;
-    const encoded = Buffer.from(fullScript, 'utf16le').toString('base64');
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (d) => {
-      stdout += d.toString();
-    });
-
-    child.stderr.on('data', (d) => {
-      stderr += d.toString();
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ stdout, stderr: 'Execution timed out', code: -1 });
-    }, timeoutMs);
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: code ?? 0 });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr: err.message, code: -1 });
-    });
-  });
-}
+import { runPowerShell } from './_powershellHelper.js';
 
 const csharpDesktopHelper = `
 Add-Type @"
@@ -218,7 +177,7 @@ foreach ($entry in $raw) {
 $items | ConvertTo-Json -Compress
 `;
 
-        const { stdout, code, stderr } = await runPowerShell(script);
+        const { stdout, code, stderr } = await runPowerShell(script, 8000);
         if (code !== 0 || !stdout) {
           return {
             success: true,
@@ -355,7 +314,7 @@ if ('${action}' -eq 'focus') {
 }
 `;
 
-      const { stdout, code, stderr } = await runPowerShell(script);
+      const { stdout, code, stderr } = await runPowerShell(script, 8000);
       if (code !== 0) {
         return { success: false, error: `Error gestionando ventana: ${stderr}` };
       }
