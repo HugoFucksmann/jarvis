@@ -47,6 +47,7 @@ export function createSystemPanel() {
         data.tools.forEach((t) => {
           const row = document.createElement('div');
           row.className = 'tool-row';
+          row.title = t.description || t.name;
           row.innerHTML = `
             <span class="tool-name">${t.name}</span>
             <span class="risk-badge ${t.riskLevel}">${t.riskLevel}</span>

@@ -35,7 +35,7 @@ export function createStatusRoutes({ agentCore, getGpuName }: StatusRouteDeps): 
         baseUrl: config.ollama.baseUrl,
       },
       hardware: {
-        os: `Windows 11 (${os.platform()} / ${os.arch()})`,
+        os: `${os.type()} ${os.release()} (${os.platform()} / ${os.arch()})`,
         cpu: cpus.length > 0 ? `${cpus[0].model.trim()} (${cpus.length} Cores)` : 'Unknown CPU',
         gpu: gpuName,
         ram: {
