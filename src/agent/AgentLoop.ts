@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { LLMProvider, ChatMessage, ToolCall } from '../llm/types.js';
 import { ToolRegistry } from '../tools/ToolRegistry.js';
 import { MemoryStore } from '../memory/MemoryStore.js';
@@ -57,10 +59,64 @@ export class AgentLoop {
     }
   }
 
+  /**
+   * Retrieves a compact 1-line snippet of the last completed task from tasks.json,
+   * used ONLY when the user explicitly asks about past tasks or wants to continue one.
+   */
+  private getRecentTaskSnippet(): string {
+    try {
+      const tasksFile = path.join(this.workspaceRoot, '.jarvis', 'tasks.json');
+      if (fs.existsSync(tasksFile)) {
+        const raw = fs.readFileSync(tasksFile, 'utf-8');
+        const tasks = JSON.parse(raw);
+        if (Array.isArray(tasks) && tasks.length > 0) {
+          const last = tasks[tasks.length - 1];
+          return `- Última tarea ejecutada: "${last.prompt}" -> Resultado: ${last.summary} (Éxito: ${last.success})`;
+        }
+      }
+    } catch {
+      // ignore read error
+    }
+    return '';
+  }
+
+  /**
+   * Decides whether a completed task should be stored in short-term chat history.
+   * Pure deterministic actions (volume, music, app launch, clipboard, screenshot)
+   * are not stored to keep conversational context pristine and lean.
+   */
+  private shouldPersistTask(prompt: string, executedTools: string[]): boolean {
+    const pureActionTools = new Set([
+      'control_media',
+      'control_volume',
+      'open_url',
+      'open_application',
+      'manage_clipboard',
+      'manage_power',
+      'simulate_input',
+      'manage_windows',
+      'send_notification',
+    ]);
+
+    // If tools were used and all of them are pure action tools, do not pollute conversational history
+    if (executedTools.length > 0 && executedTools.every((t) => pureActionTools.has(t))) {
+      return false;
+    }
+
+    // Trivial acknowledgements/greetings without substantive content
+    const p = prompt.trim().toLowerCase();
+    if (/^(ok|gracias|listo|entendido|de nada|chau|adios)$/.test(p)) {
+      return false;
+    }
+
+    return true;
+  }
+
   public async run(task: AgentTaskRequest): Promise<AgentTaskResult> {
     const startTime = Date.now();
     let iteration = 0;
     let toolCallsCount = 0;
+    const executedTools: string[] = [];
     const pastActionsHash: string[] = [];
 
     this.logger.info(`Starting task ${task.taskId}: "${task.prompt.substring(0, 80)}..."`);
@@ -83,31 +139,42 @@ export class AgentLoop {
     task.signal?.addEventListener('abort', onExternalAbort);
 
     try {
-      // 1. Retrieve long term memory facts relevant to user prompt
-      const relevantFacts = await this.memory.queryLongTermFacts(task.prompt);
+      // 1. Detect what extra context this prompt specifically needs (selective context)
+      const contextNeeds = ContextBuilder.detectContextNeeds(task.prompt);
 
-      // 2. Build system prompt
+      // 2. Retrieve long term memory facts ONLY if specifically relevant
+      const relevantFacts = contextNeeds.needsPersistentMemory
+        ? await this.memory.queryLongTermFacts(task.prompt)
+        : [];
+
+      // 3. Build minimal system prompt (MEMORY.md omitted by default)
       const systemPrompt = ContextBuilder.buildSystemPrompt({
         workspaceRoot: this.workspaceRoot,
         longTermFacts: relevantFacts,
         modelName: this.llm.getModel(),
+        includePersistentMemory: contextNeeds.needsPersistentMemory,
       });
 
-      // 3. Retrieve short-term history for this session
-      const history = await this.memory.getShortTermMessages(task.sessionId, 12);
+      // 4. Retrieve short-term history ONLY if continuity is needed (max 4 messages = 2 turns)
+      const history = contextNeeds.needsRecentHistory
+        ? await this.memory.getShortTermMessages(task.sessionId, 4)
+        : [];
 
-      // 4. Assemble message sequence
+      // 5. Retrieve TaskContext snippet ONLY if prompt explicitly continues or asks about past tasks
+      const taskContextSnippet = contextNeeds.needsTaskContext
+        ? this.getRecentTaskSnippet()
+        : '';
+
+      const finalSystemContent = taskContextSnippet
+        ? `${systemPrompt}\n\n## Contexto de Tarea Previa Relevante:\n${taskContextSnippet}`
+        : systemPrompt;
+
+      // 6. Assemble message sequence with absolute minimum tokens
       const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: finalSystemContent },
         ...history,
         { role: 'user', content: task.prompt },
       ];
-
-      // Save user prompt in short-term memory
-      await this.memory.saveShortTermMessage(task.sessionId, {
-        role: 'user',
-        content: task.prompt,
-      });
 
       let finalResponse = '';
 
@@ -194,6 +261,7 @@ export class AgentLoop {
 
           toolCallsCount++;
           const toolName = tc.function.name;
+          executedTools.push(toolName);
           const toolArgs = tc.function.arguments;
           const toolObj = this.tools.getTool(toolName);
           const riskLevel = toolObj ? toolObj.riskLevel : RiskLevel.LOW;
@@ -273,11 +341,21 @@ export class AgentLoop {
         finalResponse = 'Se alcanzó el límite máximo de iteraciones configuradas para la tarea sin llegar a una conclusión definitiva.';
       }
 
-      // Save final assistant response to short term memory
-      await this.memory.saveShortTermMessage(task.sessionId, {
-        role: 'assistant',
-        content: finalResponse,
-      });
+      // Persist in short-term history only if the task was informative / conversational (not a pure action)
+      if (this.shouldPersistTask(task.prompt, executedTools)) {
+        await this.memory.saveShortTermMessage(task.sessionId, {
+          role: 'user',
+          content: task.prompt,
+        });
+        await this.memory.saveShortTermMessage(task.sessionId, {
+          role: 'assistant',
+          content: finalResponse,
+        });
+      } else {
+        this.logger.debug(
+          `Task ${task.taskId} was a standalone action (${executedTools.join(', ') || 'action'}). Skipped short-term chat persistence.`
+        );
+      }
 
       this.emit({
         type: 'state_change',

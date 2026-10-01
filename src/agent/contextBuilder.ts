@@ -7,27 +7,78 @@ export interface SystemContextOptions {
   workspaceRoot: string;
   longTermFacts?: MemoryFact[];
   modelName: string;
+  includePersistentMemory?: boolean;
+}
+
+export interface ContextNeeds {
+  needsRecentHistory: boolean;
+  needsPersistentMemory: boolean;
+  needsTaskContext: boolean;
 }
 
 export class ContextBuilder {
+  /**
+   * Fast, zero-overhead heuristic to detect what context a prompt actually needs.
+   * By default: false for everything (pure action instructions run with minimal context).
+   */
+  public static detectContextNeeds(prompt: string): ContextNeeds {
+    const p = prompt.trim().toLowerCase();
+
+    // 1. Persistent memory: only if user specifically mentions identity, memory or preferences
+    const memoryKeywords = [
+      'recuerda', 'recuerdas', 'memoria', 'mi nombre', 'cómo me llamo', 'quién soy',
+      'mi preferencia', 'mis datos', 'qué sabes de mí', 'olvida'
+    ];
+    const needsPersistentMemory = memoryKeywords.some((k) => p.includes(k));
+
+    // 2. Task context / continuation: asking specifically about past tasks or continuing
+    const taskKeywords = [
+      'tarea anterior', 'última tarea', 'qué hiciste', 'qué acabas de hacer',
+      'continúa con lo anterior', 'sigue con la investigación', 'resultado de la búsqueda'
+    ];
+    const needsTaskContext = taskKeywords.some((k) => p.includes(k));
+
+    // 3. Conversational continuity: anaphoric references, short questions, follow-ups
+    const continuityKeywords = [
+      ' y ', '¿y ', 'eso', 'esto', 'el primero', 'el segundo', 'el tercero', 'el anterior',
+      'la anterior', 'lo anterior', 'ábrelo', 'ábrela', 'ábrelos', 'reintenta', 'otra vez',
+      'de nuevo', 'por qué', 'qué más', 'cómo así', 'continúa', 'sigue', 'pero '
+    ];
+
+    // Check if prompt is an elliptical follow-up (<= 3 words without standalone action verbs)
+    const isElliptical =
+      p.split(/\s+/).length <= 3 &&
+      !/^(abre|sube|baja|pon|busca|cierra|reproduce|lista|lee|escribe|crea|mueve|copia|pega|captura)\b/.test(p);
+
+    const needsRecentHistory = continuityKeywords.some((k) => p.includes(k)) || isElliptical;
+
+    return {
+      needsRecentHistory,
+      needsPersistentMemory,
+      needsTaskContext,
+    };
+  }
+
   public static buildSystemPrompt(options: SystemContextOptions): string {
     const now = new Date();
     const platform = os.platform();
     const hostname = os.hostname();
     const username = os.userInfo().username;
 
-    // 1. Read Unified Persistent Memory (.jarvis/MEMORY.md)
+    // 1. Read Unified Persistent Memory (.jarvis/MEMORY.md) ONLY if requested
     let persistentMemorySection = '';
-    try {
-      const memoryFile = path.join(options.workspaceRoot, '.jarvis', 'MEMORY.md');
-      if (fs.existsSync(memoryFile)) {
-        const memContent = fs.readFileSync(memoryFile, 'utf-8').trim();
-        if (memContent) {
-          persistentMemorySection = `\n## Memoria General Persistente (.jarvis/MEMORY.md):\n${memContent}\n`;
+    if (options.includePersistentMemory) {
+      try {
+        const memoryFile = path.join(options.workspaceRoot, '.jarvis', 'MEMORY.md');
+        if (fs.existsSync(memoryFile)) {
+          const memContent = fs.readFileSync(memoryFile, 'utf-8').trim();
+          if (memContent) {
+            persistentMemorySection = `\n## Memoria General Persistente (.jarvis/MEMORY.md):\n${memContent}\n`;
+          }
         }
+      } catch {
+        // ignore read error
       }
-    } catch {
-      // ignore read error
     }
 
     return `Eres J.A.R.V.I.S. (Just A Rather Very Intelligent System), un asistente de inteligencia artificial avanzado, autónomo y altamente capaz, diseñado para asistir a tu creador en desarrollo de software, automatización, gestión del sistema operativo y resolución de problemas técnicos complejos.
@@ -76,6 +127,13 @@ ${persistentMemorySection}
 11. **Navegación Web Autónoma (Playwright)**:
    - Cuentas con la herramienta \`browse_web\` para navegar páginas web interactivas en segundo plano, leer artículos, inspeccionar documentación técnica, extraer texto limpio sin publicidad (\`action: "extract"\`), hacer clics (\`action: "click"\`), o rellenar formularios (\`action: "fill"\`).
    - Diferencia clave: usa \`open_url\` cuando el usuario te pida abrir una página en su navegador visible para verla él mismo; usa \`browse_web\` cuando tú necesites navegar, leer, investigar o extraer información de una web para responderle.
+12. **Estado real de las acciones (campo \`state\` en resultados de herramientas)**:
+   - Cada herramienta puede devolver un campo \`state\` que indica el estado real de lo que ocurrió:
+     - \`completed\` / \`verified\`: la acción terminó y fue confirmada. Informa al usuario que está hecho.
+     - \`started\`: la acción comenzó (ej: se abrió el video directamente en YouTube con su URL). Informa al usuario con el título y la URL. No es necesario hacer más pasos.
+     - \`requested\`: la acción fue enviada pero **no se pudo verificar ni completar** (ej: solo se abrió la página de resultados de búsqueda, no el video/pista directamente). En este caso **sé honesto**: avisa al usuario que necesita seleccionar el resultado manualmente.
+     - \`failed\`: la acción falló definitivamente. Intenta un enfoque alternativo o informa el error con claridad.
+   - IMPORTANTE: si \`state\` es \`requested\` en una acción multimedia (YouTube, Spotify), NO afirmes que la música está reproduciéndose. Di algo como: "Abrí la búsqueda en YouTube para X — necesitás seleccionar el video manualmente."
 `;
   }
 }

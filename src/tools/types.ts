@@ -6,8 +6,21 @@ export enum RiskLevel {
   HIGH = 'HIGH',
 }
 
+/**
+ * Represents the real lifecycle state of an action performed by a tool.
+ * - requested:  the action was sent to the OS/app but completion is unknown.
+ * - started:    the process/player/app has begun but may not be fully ready.
+ * - completed:  the action finished and the result was confirmed synchronously.
+ * - verified:   completion was actively confirmed (e.g. process check, scrape).
+ * - failed:     the action was attempted but definitely did not succeed.
+ */
+export type ActionState = 'requested' | 'started' | 'completed' | 'verified' | 'failed';
+
 export interface ToolResult {
   success: boolean;
+  /** Lifecycle state of the action. Lets the agent reason about whether to
+   *  take further steps (e.g. verify, retry) or consider the task done. */
+  state?: ActionState;
   data?: unknown;
   error?: string;
   metadata?: Record<string, unknown>;

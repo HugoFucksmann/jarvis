@@ -148,8 +148,9 @@ export class OllamaProvider implements LLMProvider {
     let accumulatedToolCalls: ToolCall[] = [];
     let buffer = '';
 
+    let isStreamComplete = false;
     try {
-      while (true) {
+      while (!isStreamComplete) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -228,12 +229,22 @@ export class OllamaProvider implements LLMProvider {
                 }
               }
             }
+
+            if (chunk.done) {
+              isStreamComplete = true;
+              break;
+            }
           } catch {
             // Partial JSON chunk, ignore and continue
           }
         }
       }
     } finally {
+      try {
+        await reader.cancel();
+      } catch {
+        // Ignore cancellation error if already closed
+      }
       reader.releaseLock();
     }
 

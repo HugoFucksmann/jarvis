@@ -26,14 +26,29 @@ export class WebSearchTool extends BaseTool {
     const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 5;
 
     if (!query || typeof query !== 'string' || !query.trim()) {
-      return { success: false, error: 'Query parameter is required and cannot be empty.' };
+      return { success: false, state: 'failed', error: 'Query parameter is required and cannot be empty.' };
     }
 
     try {
-      const results = await this.searchDuckDuckGo(query.trim(), maxResults, context.signal);
+      // 1. Primary: DuckDuckGo search
+      let results = await this.searchDuckDuckGo(query.trim(), maxResults, context.signal);
+
+      // 2. Fallback: Bing search if DuckDuckGo returned 0 results or got challenged
+      if (!results || results.length === 0) {
+        results = await this.searchBing(query.trim(), maxResults, context.signal);
+      }
+
+      if (results.length === 0) {
+        return {
+          success: false,
+          state: 'failed',
+          error: `No se encontraron resultados en la web para: "${query}".`,
+        };
+      }
 
       return {
         success: true,
+        state: 'completed',
         data: {
           query,
           count: results.length,
@@ -41,7 +56,91 @@ export class WebSearchTool extends BaseTool {
         },
       };
     } catch (err: unknown) {
-      return { success: false, error: `Search failed: ${err instanceof Error ? err.message : String(err)}` };
+      // If error occurs, attempt Bing fallback as last resort
+      try {
+        const fallbackResults = await this.searchBing(query.trim(), maxResults, context.signal);
+        if (fallbackResults.length > 0) {
+          return {
+            success: true,
+            state: 'completed',
+            data: {
+              query,
+              count: fallbackResults.length,
+              results: fallbackResults,
+            },
+          };
+        }
+      } catch {}
+
+      return {
+        success: false,
+        state: 'failed',
+        error: `Search failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  private async searchBing(
+    query: string,
+    maxResults: number,
+    signal?: AbortSignal
+  ): Promise<Array<{ title: string; snippet: string; url: string }>> {
+    const headers = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    };
+
+    try {
+      const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, {
+        headers,
+        signal: signal || AbortSignal.timeout(8000),
+      });
+
+      if (!res.ok) return [];
+
+      const html = await res.text();
+      const clean = (text: string) =>
+        text
+          .replace(/<[^>]+>/g, '')
+          .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code))
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&nbsp;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const results: Array<{ title: string; snippet: string; url: string }> = [];
+      const blocks = html.split('<li class="b_algo"');
+
+      for (const block of blocks.slice(1)) {
+        const h2Match = /<h2[^>]*><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a><\/h2>/i.exec(block);
+        if (!h2Match) continue;
+
+        const rawUrl = h2Match[1];
+        let finalUrl = rawUrl;
+        const uMatch = /u=a1([^&]+)/.exec(rawUrl);
+        if (uMatch) {
+          try {
+            finalUrl = Buffer.from(uMatch[1], 'base64').toString('utf-8');
+          } catch {}
+        }
+
+        const title = clean(h2Match[2]);
+        const pMatch = /<p[^>]*>([\s\S]*?)<\/p>/i.exec(block);
+        const snippet = pMatch ? clean(pMatch[1]) : '';
+
+        if (title && finalUrl.startsWith('http')) {
+          results.push({ title, snippet, url: finalUrl });
+        }
+
+        if (results.length >= maxResults) break;
+      }
+
+      return results;
+    } catch {
+      return [];
     }
   }
 
@@ -52,7 +151,7 @@ export class WebSearchTool extends BaseTool {
   ): Promise<Array<{ title: string; snippet: string; url: string }>> {
     const headers = {
       'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml',
     };
 

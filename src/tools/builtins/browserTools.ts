@@ -59,10 +59,11 @@ export class OpenUrlTool extends BaseTool {
             if (code === 0 || code === null) {
               resolve({
                 success: true,
+                state: 'completed',
                 data: { message: `URL abierta en el navegador del sistema: ${url}`, url },
               });
             } else {
-              resolve({ success: false, error: `cmd /c start falló con código ${code}` });
+              resolve({ success: false, state: 'failed', error: `cmd /c start falló con código ${code}` });
             }
           });
 
@@ -72,6 +73,7 @@ export class OpenUrlTool extends BaseTool {
               resolved = true;
               resolve({
                 success: true,
+                state: 'completed',
                 data: { message: `URL enviada al navegador del sistema: ${url}`, url },
               });
             }
@@ -79,13 +81,13 @@ export class OpenUrlTool extends BaseTool {
         } else if (process.platform === 'darwin') {
           const child = spawn('open', [url], { detached: true, stdio: 'ignore' });
           child.unref();
-          child.on('error', (err) => resolve({ success: false, error: err.message }));
-          setTimeout(() => resolve({ success: true, data: { message: `URL opened: ${url}`, url } }), 200);
+          child.on('error', (err) => resolve({ success: false, state: 'failed', error: err.message }));
+          setTimeout(() => resolve({ success: true, state: 'completed', data: { message: `URL opened: ${url}`, url } }), 200);
         } else {
           const child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
           child.unref();
-          child.on('error', (err) => resolve({ success: false, error: err.message }));
-          setTimeout(() => resolve({ success: true, data: { message: `URL opened: ${url}`, url } }), 200);
+          child.on('error', (err) => resolve({ success: false, state: 'failed', error: err.message }));
+          setTimeout(() => resolve({ success: true, state: 'completed', data: { message: `URL opened: ${url}`, url } }), 200);
         }
       } catch (err: unknown) {
         resolve({ success: false, error: `Error launching browser: ${err instanceof Error ? err.message : String(err)}` });

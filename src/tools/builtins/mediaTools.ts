@@ -1,5 +1,5 @@
 import { BaseTool } from '../Tool.js';
-import { RiskLevel, ToolExecutionContext, ToolResult } from '../types.js';
+import { RiskLevel, ToolExecutionContext, ToolResult, ActionState } from '../types.js';
 import { spawn } from 'child_process';
 
 /**
@@ -69,6 +69,72 @@ function openUrlCrossPlatform(url: string): Promise<void> {
       resolve();
     }
   });
+}
+
+/**
+ * Searches YouTube directly and returns the first direct watch URL found
+ * (youtube.com/watch?v=...) plus the video title.
+ * Falls back to search results if nothing is found.
+ */
+async function searchYouTubeDirect(query: string, preferMusic: boolean): Promise<{
+  url: string;
+  title: string;
+  videoId: string | null;
+  state: ActionState;
+}> {
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  };
+
+  try {
+    const res = await fetch(searchUrl, {
+      headers,
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+
+      // Priority 1: Match videoRenderer which contains both videoId and title
+      const rendererMatch = html.match(
+        /"videoRenderer":\s*\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"/
+      );
+      if (rendererMatch) {
+        const videoId = rendererMatch[1];
+        const title = rendererMatch[2].replace(/\\u0026/g, '&').replace(/&#39;/g, "'").trim();
+        const finalUrl = preferMusic
+          ? `https://music.youtube.com/watch?v=${videoId}`
+          : `https://www.youtube.com/watch?v=${videoId}`;
+        return { url: finalUrl, title, videoId, state: 'started' };
+      }
+
+      // Priority 2: Simple videoId match
+      const simpleMatch = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+      if (simpleMatch) {
+        const videoId = simpleMatch[1];
+        const finalUrl = preferMusic
+          ? `https://music.youtube.com/watch?v=${videoId}`
+          : `https://www.youtube.com/watch?v=${videoId}`;
+        return { url: finalUrl, title: query, videoId, state: 'started' };
+      }
+    }
+  } catch {
+    // Ignore and proceed to fallback
+  }
+
+  // Fallback: open results page (state: requested — not yet playing)
+  const fallbackUrl = preferMusic
+    ? `https://music.youtube.com/search?q=${encodeURIComponent(query)}`
+    : `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+
+  return {
+    url: fallbackUrl,
+    title: query,
+    videoId: null,
+    state: 'requested',
+  };
 }
 
 export class MediaControlTool extends BaseTool {
@@ -144,11 +210,13 @@ try {
           const usedApp = stdout.includes('OK_APP');
           return {
             success: true,
+            state: 'started' as ActionState,
             data: {
               message: `Búsqueda iniciada en Spotify para "${query}" (${usedApp ? 'App de escritorio' : 'Reproductor web'}).`,
               query,
               mode: usedApp ? 'desktop_app' : 'web_browser',
               url: usedApp ? appUri : webUrl,
+              // state 'started': Spotify received the URI. Track may take 1-2s to begin.
             },
           };
         } else {
@@ -156,8 +224,9 @@ try {
           await openUrlCrossPlatform(webUrl);
           return {
             success: true,
+            state: 'requested' as ActionState,
             data: {
-              message: `Reproductor web de Spotify abierto buscando: "${query}".`,
+              message: `Reproductor web de Spotify abierto buscando: "${query}". El usuario debe seleccionar la pista.`,
               query,
               mode: 'web_browser',
               url: webUrl,
@@ -171,25 +240,36 @@ try {
         if (!query) {
           return {
             success: false,
+            state: 'failed' as ActionState,
             error: 'Se requiere el parámetro "query" para buscar y reproducir en YouTube.',
           };
         }
 
-        const encodedQuery = encodeURIComponent(query);
         const isMusic = service === 'youtube_music';
-        const targetUrl = isMusic
-          ? `https://music.youtube.com/search?q=${encodedQuery}`
-          : `https://www.youtube.com/results?search_query=${encodedQuery}`;
 
-        await openUrlCrossPlatform(targetUrl);
+        // Step 1: find the direct video URL via DuckDuckGo
+        const found = await searchYouTubeDirect(query, isMusic);
+
+        // Step 2: open the direct video (or results fallback)
+        await openUrlCrossPlatform(found.url);
+
+        const serviceName = isMusic ? 'YouTube Music' : 'YouTube';
+        const isDirectVideo = found.videoId !== null;
 
         return {
           success: true,
+          state: found.state,
           data: {
-            message: `${isMusic ? 'YouTube Music' : 'YouTube'} abierto buscando: "${query}".`,
+            message: isDirectVideo
+              ? `Reproduciendo en ${serviceName}: "${found.title}".`
+              : `No se encontró un video directo. Se abrió la búsqueda en ${serviceName} para: "${query}". El usuario debe seleccionar el video manualmente.`,
             query,
             service: isMusic ? 'youtube_music' : 'youtube',
-            url: targetUrl,
+            title: found.title,
+            url: found.url,
+            videoId: found.videoId,
+            // 'started' = direct video opened; 'requested' = only search results opened
+            directVideo: isDirectVideo,
           },
         };
       }
