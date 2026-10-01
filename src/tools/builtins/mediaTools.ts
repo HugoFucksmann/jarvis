@@ -47,12 +47,13 @@ function openUrlCrossPlatform(url: string): Promise<void> {
   return new Promise((resolve) => {
     try {
       if (process.platform === 'win32') {
-        const escaped = url.replace(/'/g, "''");
-        const child = spawn(
-          'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath '${escaped}'`],
-          { detached: true, stdio: 'ignore', windowsHide: true }
-        );
+        // cmd /c start is the canonical Windows method to open URLs in the default browser.
+        // Start-Process -FilePath does NOT work for URLs (expects a file path).
+        const child = spawn('cmd.exe', ['/c', 'start', '""', url], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+        });
         child.unref();
         resolve();
       } else if (process.platform === 'darwin') {
@@ -127,13 +128,15 @@ export class MediaControlTool extends BaseTool {
         const appUri = `spotify:search:${encodedQuery}`;
 
         if (process.platform === 'win32' && targetApp !== 'web') {
-          // Try native Spotify protocol handler first
+          // Try native Spotify URI protocol handler via cmd start (works for spotify: URIs and https:// alike)
+          const escapedUri = appUri.replace(/"/g, '');
+          const escapedWeb = webUrl.replace(/"/g, '');
           const script = `
 try {
-    Start-Process -FilePath "${appUri}" -ErrorAction Stop
+    Start-Process "${escapedUri}" -ErrorAction Stop
     Write-Output "OK_APP"
 } catch {
-    Start-Process -FilePath "${webUrl}"
+    Start-Process "${escapedWeb}"
     Write-Output "OK_WEB"
 }
 `;

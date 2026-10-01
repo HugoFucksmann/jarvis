@@ -6,7 +6,7 @@ import fs from 'fs';
 
 export class OpenUrlTool extends BaseTool {
   readonly name = 'open_url';
-  readonly description = 'Abre una dirección URL en el navegador predeterminado del sistema del usuario.';
+  readonly description = 'Abre una URL en el navegador predeterminado del sistema del usuario de forma VISIBLE (el usuario ve la página abrirse). Úsalo cuando el usuario pida "abrir", "buscar y abrir", "mostrar" o "ir a" una web en su navegador. Para scraping silencioso o extracción de contenido usa browse_web en su lugar.';
   readonly riskLevel = RiskLevel.LOW;
   readonly requiredPermissions = ['browser:open'];
   readonly parameters = {
@@ -36,36 +36,46 @@ export class OpenUrlTool extends BaseTool {
     return new Promise((resolve) => {
       try {
         if (process.platform === 'win32') {
-          // Robust Windows launch using PowerShell Start-Process detached from node stdio
-          const escaped = url.replace(/'/g, "''");
+          // Use cmd /c start — the canonical Windows method to open URLs in the default browser.
+          // PowerShell's Start-Process -FilePath does NOT work for URLs (it expects a file path).
           const child = spawn(
-            'powershell.exe',
-            ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath '${escaped}'`],
+            'cmd.exe',
+            ['/c', 'start', '""', url],
             { detached: true, stdio: 'ignore', windowsHide: true }
           );
           child.unref();
 
+          let resolved = false;
+
           child.on('error', (err) => {
-            // Fallback to explorer.exe if powershell fails
-            try {
-              const fallback = spawn('explorer.exe', [url], { detached: true, stdio: 'ignore' });
-              fallback.unref();
+            if (resolved) return;
+            resolved = true;
+            resolve({ success: false, error: `Error al abrir el navegador: ${err.message}` });
+          });
+
+          child.on('close', (code) => {
+            if (resolved) return;
+            resolved = true;
+            if (code === 0 || code === null) {
               resolve({
                 success: true,
-                data: { message: `URL opened with Windows Explorer: ${url}`, url },
+                data: { message: `URL abierta en el navegador del sistema: ${url}`, url },
               });
-            } catch {
-              resolve({ success: false, error: `Failed to open URL: ${err.message}` });
+            } else {
+              resolve({ success: false, error: `cmd /c start falló con código ${code}` });
             }
           });
 
-          // Give a brief tick to capture immediate errors
+          // Safety timeout in case neither event fires
           setTimeout(() => {
-            resolve({
-              success: true,
-              data: { message: `URL opened in system browser: ${url}`, url },
-            });
-          }, 250);
+            if (!resolved) {
+              resolved = true;
+              resolve({
+                success: true,
+                data: { message: `URL enviada al navegador del sistema: ${url}`, url },
+              });
+            }
+          }, 1500);
         } else if (process.platform === 'darwin') {
           const child = spawn('open', [url], { detached: true, stdio: 'ignore' });
           child.unref();

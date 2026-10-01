@@ -5,7 +5,7 @@ import { getSharedPlaywrightManager } from '../../browser/PlaywrightManager.js';
 export class BrowseWebTool extends BaseTool {
   readonly name = 'browse_web';
   readonly description =
-    'Navega, interactúa y extrae información de páginas web de forma autónoma en segundo plano con Playwright. Permite leer artículos, navegar documentación técnica, rellenar formularios, hacer clics y tomar capturas web sin abrir ventanas visibles en el escritorio del usuario.';
+    'Navega y extrae información de páginas web de forma INVISIBLE y en segundo plano con Playwright (headless). El usuario NO verá ninguna ventana abrirse. Úsalo SOLO para leer contenido, scraping, rellenar formularios o tomar capturas de pantalla de forma automatizada. Si el usuario quiere ABRIR una página en su navegador visible, usa la herramienta "open_url" en su lugar.';
   readonly riskLevel = RiskLevel.LOW;
   readonly requiredPermissions = ['browser:navigate'];
   readonly parameters = {
@@ -15,7 +15,7 @@ export class BrowseWebTool extends BaseTool {
         type: 'string',
         enum: ['navigate', 'extract', 'click', 'fill', 'press', 'screenshot', 'evaluate', 'close'],
         description:
-          'Acción a realizar: "extract" (lee y extrae texto limpio de la página), "navigate" (visita una URL), "click" (hace clic en un elemento), "fill" (escribe en un campo de texto), "press" (presiona una tecla como Enter), "screenshot" (captura visual de la página), "evaluate" (ejecuta JS) o "close" (cierra el navegador).',
+          'Acción a realizar: "extract" (lee y extrae texto limpio de la página en modo headless), "navigate" (visita una URL en modo headless invisible, NO abre ventana visible), "click" (hace clic en un elemento), "fill" (escribe en un campo de texto), "press" (presiona una tecla como Enter), "screenshot" (captura visual de la página en background), "evaluate" (ejecuta JS) o "close" (cierra el navegador headless).',
       },
       url: {
         type: 'string',

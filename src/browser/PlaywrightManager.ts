@@ -105,19 +105,21 @@ export class PlaywrightManager {
         data: { message: `Navegación completada: ${this.lastTitle} (${this.lastUrl})` },
       };
     } catch (err: unknown) {
-      // Fallback for navigation verification if browser launch fails
+      // Browser launch failed — report the real error, but provide HTTP fallback content for context
+      const errMsg = err instanceof Error ? err.message : String(err);
       this.lastUrl = targetUrl;
       const fallback = await this.fallbackExtract(targetUrl);
       this.lastTitle = fallback.title;
 
       return {
         action: 'navigate',
-        success: true,
+        success: false,
         url: targetUrl,
         title: fallback.title,
+        error: `No se pudo abrir el navegador Playwright: ${errMsg}. Usa la herramienta "open_in_browser" para abrir URLs en el navegador visible del sistema.`,
         data: {
-          message: `Navegación procesada vía fallback HTTP: ${fallback.title}`,
-          preview: fallback.content.slice(0, 200),
+          message: `El navegador no pudo abrirse. Se obtuvo contenido vía HTTP como referencia.`,
+          fallbackContent: fallback.content.slice(0, 500),
         },
       };
     }
