@@ -1,36 +1,96 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, nativeImage, shell, screen } = require('electron');
 const path = require('path');
+
+const WINDOW_WIDTH = 740;
+// Altura inicial = la de antes; el renderer la ajusta al contenido vía jarvis:resizeHeight.
+// Si preload no expone resizeHeight, el comportamiento es idéntico al anterior.
+const INITIAL_HEIGHT = 480;
+const MIN_HEIGHT = 80; // barra (56px) + padding de ventana (24px)
+const MAX_HEIGHT = 750;
 
 let mainWindow = null;
 let tray = null;
+
+const isAlive = () => mainWindow && !mainWindow.isDestroyed();
+
+function showWindow() {
+  if (!isAlive()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
+  app.on('second-instance', showWindow);
 }
 
+// ── IPC: se registra UNA sola vez (antes se duplicaba al recrear la ventana) ──
+ipcMain.on('jarvis:openExternal', (_event, targetUrl) => {
+  if (typeof targetUrl === 'string' && /^https?:\/\//i.test(targetUrl)) {
+    shell.openExternal(targetUrl);
+  }
+});
+
+ipcMain.on('jarvis:show', showWindow);
+
+ipcMain.on('jarvis:wakeWordTriggered', (_event, phrase) => {
+  console.log('[JARVIS Desktop] Wake word triggered:', phrase);
+  showWindow();
+});
+
+ipcMain.on('jarvis:hide', () => {
+  if (isAlive()) mainWindow.hide();
+});
+
+ipcMain.on('jarvis:minimize', () => {
+  if (isAlive()) mainWindow.minimize();
+});
+
+ipcMain.on('jarvis:close', () => {
+  if (isAlive()) mainWindow.close();
+});
+
+ipcMain.on('jarvis:resizeHeight', (_event, height) => {
+  if (!isAlive()) return;
+  const requested = Number(height);
+  if (!Number.isFinite(requested)) return;
+
+  const bounds = mainWindow.getBounds();
+  const { workArea } = screen.getDisplayMatching(bounds);
+  // Nunca crecer más allá del borde inferior de la pantalla
+  const maxByScreen = Math.max(workArea.y + workArea.height - bounds.y, MIN_HEIGHT);
+  const next = Math.round(Math.min(Math.max(requested, MIN_HEIGHT), MAX_HEIGHT, maxByScreen));
+
+  if (next !== bounds.height) mainWindow.setSize(bounds.width, next);
+});
+
 function createWindow() {
+  // Barra anclada en el tercio superior: al crecer hacia abajo no se sale de pantalla
+  const { workArea } = screen.getPrimaryDisplay();
+  const x = Math.round(workArea.x + (workArea.width - WINDOW_WIDTH) / 2);
+  const y = Math.round(workArea.y + workArea.height * 0.12);
+
   mainWindow = new BrowserWindow({
-    width: 740,
-    height: 480,
-    center: true,
+    x,
+    y,
+    width: WINDOW_WIDTH,
+    height: INITIAL_HEIGHT,
     title: 'J.A.R.V.I.S.',
     backgroundColor: '#00000000',
     transparent: true,
-    frame: false, // Frameless floating HUD for true native luxury feel
+    frame: false, // HUD flotante sin marco
     hasShadow: true,
-    resizable: true,
+    // La altura la gobierna el contenido; redimensionar a mano pelearía con resizeHeight
+    resizable: false,
     minWidth: 520,
-    minHeight: 360,
+    minHeight: MIN_HEIGHT,
     autoHideMenuBar: true,
     show: true,
     webPreferences: {
@@ -47,7 +107,7 @@ function createWindow() {
     console.error('Error cargando la interfaz nativa:', err);
   });
 
-  // Handle external link clicks in native browser
+  // Enlaces externos en el navegador del sistema
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url);
@@ -64,55 +124,6 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-
-  // Window IPC handlers
-  ipcMain.on('jarvis:openExternal', (_event, targetUrl) => {
-    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-      shell.openExternal(targetUrl);
-    }
-  });
-
-  ipcMain.on('jarvis:show', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-
-  ipcMain.on('jarvis:wakeWordTriggered', (_event, phrase) => {
-    console.log('[JARVIS Desktop] Wake word triggered:', phrase);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-
-  ipcMain.on('jarvis:hide', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.hide();
-    }
-  });
-
-  ipcMain.on('jarvis:minimize', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.minimize();
-    }
-  });
-
-  ipcMain.on('jarvis:close', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.close();
-    }
-  });
-
-  ipcMain.on('jarvis:resizeHeight', (_event, height) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      const [w] = mainWindow.getSize();
-      mainWindow.setSize(w, Math.min(Math.max(Math.round(height), 200), 750));
-    }
-  });
 }
 
 function createTray() {
@@ -128,17 +139,7 @@ function createTray() {
     tray.setToolTip('J.A.R.V.I.S. - Sistema Activo');
 
     const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Mostrar JARVIS',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          } else {
-            createWindow();
-          }
-        },
-      },
+      { label: 'Mostrar JARVIS', click: showWindow },
       { type: 'separator' },
       {
         label: 'Salir',
@@ -150,24 +151,21 @@ function createTray() {
     ]);
 
     tray.setContextMenu(contextMenu);
-    tray.on('click', () => {
-      toggleWindow();
-    });
+    tray.on('click', toggleWindow);
   } catch (err) {
     console.error('Tray init error:', err);
   }
 }
 
 function toggleWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) {
+  if (!isAlive()) {
     createWindow();
     return;
   }
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
-    mainWindow.show();
-    mainWindow.focus();
+    showWindow();
   }
 }
 
@@ -177,11 +175,10 @@ app.whenReady().then(() => {
 
   ['Ctrl+Space', 'Alt+Space', 'CommandOrControl+Shift+J'].forEach((hk) => {
     try {
-      globalShortcut.register(hk, () => {
-        toggleWindow();
-      });
-    } catch (_err) {
-      // ignore shortcut registration conflict
+      const ok = globalShortcut.register(hk, toggleWindow);
+      if (!ok) console.warn(`[JARVIS Desktop] Atajo no disponible (en uso): ${hk}`);
+    } catch (err) {
+      console.warn(`[JARVIS Desktop] Error registrando atajo ${hk}:`, err);
     }
   });
 });

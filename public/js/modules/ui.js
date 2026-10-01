@@ -1,105 +1,147 @@
 /**
- * ui.js — UI state machine: modes, activity strip, reactor, hints, external links.
+ * ui.js — UI state machine: modes, activity strip, reactor, notices, external links.
+ *
+ * Modos: idle | responding | tools | history | memory | security | scheduler | subagents
+ * "idle" y "responding" son los modos BASE (barra sola / barra + respuesta).
+ * "tools" y los drawers son paneles superpuestos que siempre vuelven al modo base.
  */
 import { state, dom } from './state.js';
 
 const HINTS = {
-  idle:       '<span><kbd>Enter</kbd> enviar</span><span><kbd>Ctrl+M</kbd> voz</span><span><kbd>Alt+Espacio</kbd> invocar</span>',
-  working:    '<span><kbd>Esc</kbd> detener</span><span>Procesando directiva...</span>',
+  idle: '<span><kbd>Enter</kbd> enviar</span><span><kbd>Ctrl+M</kbd> voz</span><span><kbd>Alt+Espacio</kbd> invocar</span>',
+  working: '<span><kbd>Esc</kbd> detener</span><span>Procesando directiva...</span>',
   responding: '<span><kbd>Esc</kbd> limpiar</span><span><kbd>Ctrl+Shift+C</kbd> copiar</span><span><kbd>Alt+Espacio</kbd> ocultar</span>',
-  history:    '<span><kbd>Esc</kbd> cerrar historial</span><span>Clic en tarea para reutilizar</span>',
-  memory:     '<span><kbd>Esc</kbd> cerrar memoria</span><span>Edición directa de .jarvis/MEMORY.md</span>',
-  security:   '<span><kbd>Esc</kbd> cerrar seguridad</span><span>Configuración de comandos y permisos</span>',
-  scheduler:  '<span><kbd>Esc</kbd> cerrar agenda</span><span>Recordatorios y tareas programadas</span>',
-  subagents:  '<span><kbd>Esc</kbd> cerrar subagentes</span><span>Tareas en segundo plano activas</span>',
-  approval:   '<span><kbd>Ctrl+Enter</kbd> autorizar</span><span><kbd>Esc</kbd> denegar</span>',
+  tools: '<span><kbd>Esc</kbd> cerrar menú</span>',
+  history: '<span><kbd>Esc</kbd> volver</span><span>Clic en tarea para reutilizar</span>',
+  memory: '<span><kbd>Esc</kbd> volver</span><span>Edición directa de .jarvis/MEMORY.md</span>',
+  security: '<span><kbd>Esc</kbd> volver</span><span>Configuración de comandos y permisos</span>',
+  scheduler: '<span><kbd>Esc</kbd> volver</span><span>Recordatorios y tareas programadas</span>',
+  subagents: '<span><kbd>Esc</kbd> volver</span><span>Tareas en segundo plano activas</span>',
+  approval: '<span><kbd>Ctrl+Enter</kbd> autorizar</span><span><kbd>Esc</kbd> denegar</span>',
 };
 
 const DRAWER_MODES = ['history', 'memory', 'security', 'scheduler', 'subagents'];
 
 /** Closes all drawers and deactivates their toggle buttons. */
 export function closeAllDrawers() {
-  const drawerMap = {
-    history:   'history-drawer',
-    memory:    'memory-drawer',
-    security:  'security-drawer',
-    scheduler: 'scheduler-drawer',
-    subagents: 'subagents-drawer',
-  };
-  const toggleMap = {
-    history:   'btn-toggle-history',
-    memory:    'btn-toggle-memory',
-    security:  'btn-toggle-security',
-    scheduler: 'btn-toggle-scheduler',
-    subagents: 'btn-toggle-subagents',
-  };
-  Object.values(drawerMap).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  Object.values(toggleMap).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
-  });
+  [dom.historyDrawer, dom.memoryDrawer, dom.securityDrawer, dom.schedulerDrawer, dom.subagentsDrawer]
+    .forEach((el) => { if (el) el.style.display = 'none'; });
+  [dom.btnToggleHistory, dom.btnToggleMemory, dom.btnToggleSecurity, dom.btnToggleScheduler, dom.btnToggleSubagents]
+    .forEach((el) => { if (el) el.classList.remove('active'); });
+}
+
+function show(el, visible) {
+  if (el) el.style.display = visible ? 'flex' : 'none';
 }
 
 export function setMode(mode) {
+  if (!dom.container) return;
   dom.container.dataset.mode = mode;
 
-  // Panel visibility
-  dom.idleState.style.display     = mode === 'idle'       ? 'flex' : 'none';
-  dom.panel.style.display         = mode === 'responding' ? 'flex' : 'none';
-  dom.historyDrawer.style.display = mode === 'history'    ? 'flex' : 'none';
-  dom.memoryDrawer.style.display  = mode === 'memory'     ? 'flex' : 'none';
+  // Visibilidad de paneles: única fuente de verdad (incluye el menú de módulos)
+  show(dom.idleState, false);
+  show(dom.toolsTray, mode === 'tools');
+  show(dom.panel, mode === 'responding');
+  show(dom.historyDrawer, mode === 'history');
+  show(dom.memoryDrawer, mode === 'memory');
+  show(dom.securityDrawer, mode === 'security');
+  show(dom.schedulerDrawer, mode === 'scheduler');
+  show(dom.subagentsDrawer, mode === 'subagents');
 
-  if (dom.securityDrawer)
-    dom.securityDrawer.style.display  = mode === 'security'  ? 'flex' : 'none';
-  if (dom.schedulerDrawer)
-    dom.schedulerDrawer.style.display = mode === 'scheduler' ? 'flex' : 'none';
-  if (dom.subagentsDrawer)
-    dom.subagentsDrawer.style.display = mode === 'subagents' ? 'flex' : 'none';
+  // Estado activo de los botones
+  dom.btnToggleHistory?.classList.toggle('active', mode === 'history');
+  dom.btnToggleMemory?.classList.toggle('active', mode === 'memory');
+  dom.btnToggleSecurity?.classList.toggle('active', mode === 'security');
+  dom.btnToggleScheduler?.classList.toggle('active', mode === 'scheduler');
+  dom.btnToggleSubagents?.classList.toggle('active', mode === 'subagents');
 
-  // Active-state on toolbar buttons
-  if (dom.btnToggleHistory)
-    dom.btnToggleHistory.classList.toggle('active',   mode === 'history');
-  if (dom.btnToggleMemory)
-    dom.btnToggleMemory.classList.toggle('active',    mode === 'memory');
-  if (dom.btnToggleSecurity)
-    dom.btnToggleSecurity.classList.toggle('active',  mode === 'security');
-  if (dom.btnToggleScheduler)
-    dom.btnToggleScheduler.classList.toggle('active', mode === 'scheduler');
-  if (dom.btnToggleSubagents)
-    dom.btnToggleSubagents.classList.toggle('active', mode === 'subagents');
+  const panelOpen = mode === 'tools' || DRAWER_MODES.includes(mode);
+  if (dom.btnTools) {
+    dom.btnTools.classList.toggle('active', panelOpen);
+    dom.btnTools.setAttribute('aria-expanded', String(panelOpen));
+  }
 
-  // Footer hints
-  dom.footerHint.innerHTML = state.pendingApprovalId
-    ? HINTS.approval
-    : (HINTS[mode] || HINTS.idle);
+  if (dom.footerHint) {
+    dom.footerHint.innerHTML = state.pendingApprovalId ? HINTS.approval : (HINTS[mode] || HINTS.idle);
+  }
 
   if (mode === 'idle' || mode === 'responding') {
-    setTimeout(() => dom.input?.focus(), 50);
+    setTimeout(() => {
+      // Evita robar el foco si el modo cambió durante el retardo
+      if (dom.container.dataset.mode === mode) dom.input?.focus();
+    }, 50);
   }
 }
 
-/** Returns true if the current mode is any drawer mode. */
+/** Modo base según haya o no respuesta en pantalla. */
+export function getBaseMode() {
+  return state.rawResponse ? 'responding' : 'idle';
+}
+
+export function openTools() {
+  setMode('tools');
+}
+
+/** Cierra menú/drawers y vuelve al modo base (conserva la respuesta visible). */
+export function closePanels() {
+  setMode(getBaseMode());
+}
+
+/**
+ * Re-evalúa el modo base SOLO si el usuario está en idle/responding.
+ * No arrastra al usuario fuera de un drawer o del menú por eventos asíncronos.
+ */
+export function settleMode() {
+  const mode = dom.container?.dataset?.mode;
+  if (mode === 'idle' || mode === 'responding') setMode(getBaseMode());
+}
+
 export function isDrawerMode() {
   return DRAWER_MODES.includes(dom.container?.dataset?.mode);
 }
 
-export function setReactorState(reactorState) {
-  if (!dom.reactor) return;
-  dom.reactor.className = 'reactor-core';
-  if (reactorState === 'listening') dom.reactor.classList.add('listening');
-  else if (reactorState === 'speaking') dom.reactor.classList.add('speaking');
-  else if (reactorState === 'thinking') dom.reactor.classList.add('thinking');
+export function isToolsOrDrawerMode() {
+  return dom.container?.dataset?.mode === 'tools' || isDrawerMode();
 }
 
+// ── Reactor ───────────────────────────────────────────────────────────────────
+export function setReactorState(reactorState) {
+  if (!dom.reactor) return;
+  // Sin conexión, el estado "idle" se muestra como desconectado
+  const effective = !state.isConnected && reactorState === 'idle' ? 'offline' : reactorState;
+  dom.reactor.className = 'reactor-core';
+  if (['listening', 'speaking', 'thinking', 'offline'].includes(effective)) {
+    dom.reactor.classList.add(effective);
+  }
+  dom.reactor.title = effective === 'offline' ? 'JARVIS desconectado — reconectando…' : 'JARVIS en línea';
+}
+
+// ── Avisos (reemplazan a alert()) ─────────────────────────────────────────────
+let noticeTimer = null;
+
+/** duration = 0 → permanece hasta hideNotice(). */
+export function showNotice(message, duration = 5000) {
+  if (!dom.notice) return;
+  clearTimeout(noticeTimer);
+  dom.notice.textContent = message;
+  dom.notice.style.display = 'flex';
+  if (duration > 0) noticeTimer = setTimeout(hideNotice, duration);
+}
+
+export function hideNotice() {
+  clearTimeout(noticeTimer);
+  if (dom.notice) dom.notice.style.display = 'none';
+}
+
+// ── Barra de actividad ────────────────────────────────────────────────────────
 export function setActivity(active, label) {
   clearInterval(state.timer);
+  state.timer = null;
   if (active) {
     state.activityText = label || 'Procesando...';
     if (dom.strip) dom.strip.style.display = 'flex';
     if (dom.abortBtn) dom.abortBtn.style.display = state.isExecuting ? 'inline-block' : 'none';
+    dom.body?.setAttribute('aria-busy', String(state.isExecuting));
 
     if (state.isExecuting) {
       const tick = () => {
@@ -109,29 +151,37 @@ export function setActivity(active, label) {
       };
       tick();
       state.timer = setInterval(tick, 1000);
-    } else {
-      if (dom.stripLabel) dom.stripLabel.textContent = state.activityText;
+    } else if (dom.stripLabel) {
+      dom.stripLabel.textContent = state.activityText;
     }
 
     if (!state.isSpeaking) setReactorState('thinking');
   } else {
     if (dom.strip) dom.strip.style.display = 'none';
     if (dom.toolBadge) dom.toolBadge.style.display = 'none';
+    dom.body?.setAttribute('aria-busy', 'false');
     if (!state.isSpeaking) setReactorState('idle');
   }
 }
 
+// ── Enlaces externos ──────────────────────────────────────────────────────────
 export function openExternalUrl(url) {
   if (!url) return;
   try {
-    let cleanUrl = url.trim();
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = 'https://' + cleanUrl;
+    const raw = String(url).trim();
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      parsed = new URL('https://' + raw);
     }
+    // Solo http/https: descarta javascript:, file:, etc.
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+
     if (window.electronAPI?.openExternal) {
-      window.electronAPI.openExternal(cleanUrl);
+      window.electronAPI.openExternal(parsed.href);
     } else {
-      window.open(cleanUrl, '_blank', 'noopener,noreferrer');
+      window.open(parsed.href, '_blank', 'noopener,noreferrer');
     }
   } catch (err) {
     console.error('Error abriendo enlace externo:', err);

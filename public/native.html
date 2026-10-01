@@ -16,17 +16,18 @@
 <body class="native-body">
   <div class="jarvis-window" id="jarvis-container" data-mode="idle">
 
-    <!-- ── BARRA PRINCIPAL (Única visible en Idle) ── -->
+    <!-- ── BARRA PRINCIPAL (única visible en idle) ── -->
     <header class="command-bar" id="drag-handle">
       <div class="reactor-core" id="reactor-dot" title="JARVIS en línea"></div>
 
       <input type="text" id="native-input" class="command-input" placeholder="¿En qué puedo asistirlo, señor?"
-        autocomplete="off" spellcheck="false" autofocus />
+        aria-label="Directiva para JARVIS" autocomplete="off" spellcheck="false" autofocus />
 
       <div class="command-actions">
         <!-- Micrófono -->
-        <button id="native-mic-btn" class="icon-btn" title="Hablar">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="native-mic-btn" class="icon-btn" title="Hablar" aria-label="Hablar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            aria-hidden="true">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
             <line x1="12" y1="19" x2="12" y2="23" />
@@ -34,9 +35,11 @@
           </svg>
         </button>
 
-        <!-- Botón de Módulos (Se ilumina cuando está abierto) -->
-        <button id="btn-toggle-tools" class="icon-btn" title="Módulos y herramientas">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Módulos (se ilumina cuando el menú o un drawer está abierto) -->
+        <button id="btn-toggle-tools" class="icon-btn" title="Módulos y herramientas"
+          aria-label="Módulos y herramientas" aria-expanded="false" aria-controls="content-area">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
@@ -45,30 +48,37 @@
         </button>
 
         <!-- Enviar -->
-        <button id="native-send-btn" class="send-btn" title="Enviar (Enter)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <button id="native-send-btn" class="send-btn" title="Enviar (Enter)" aria-label="Enviar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            aria-hidden="true">
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
         </button>
 
-        <!-- Cerrar -->
-        <button id="native-close-btn" class="icon-btn close-btn" title="Ocultar (Esc)">✕</button>
+        <!-- Ocultar -->
+        <button id="native-close-btn" class="icon-btn close-btn" title="Ocultar (Esc)" aria-label="Ocultar ventana">
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
     </header>
 
+    <!-- Aviso de estado/errores (reemplaza a alert()) -->
+    <div class="inline-status notice" id="notice" role="status" aria-live="polite" style="display: none;"></div>
+
     <!-- Indicador de procesamiento -->
-    <div class="inline-status" id="activity-strip" style="display: none;">
-      <span class="status-pulse"></span>
+    <div class="inline-status" id="activity-strip" role="status" aria-live="polite" style="display: none;">
+      <span class="status-pulse" aria-hidden="true"></span>
       <span class="status-text" id="activity-label">Procesando...</span>
       <span class="status-tool" id="activity-tool-badge" style="display: none;"></span>
       <button id="btn-abort-task" class="status-abort">Detener</button>
     </div>
 
-    <!-- Modal de confirmación de seguridad -->
-    <div class="security-card" id="approval-card" style="display: none;">
+    <!-- Confirmación de seguridad -->
+    <div class="security-card" id="approval-card" role="alertdialog" aria-labelledby="approval-title"
+      style="display: none;">
       <div class="security-header">
-        <span class="security-badge">Confirmación requerida</span>
+        <span class="security-badge" id="approval-title">Confirmación requerida</span>
         <span class="security-risk" id="approval-risk">HIGH</span>
       </div>
       <p class="security-desc">Se solicita autorización para ejecutar:</p>
@@ -82,77 +92,76 @@
       </div>
     </div>
 
-    <!-- ── ÁREA DE CONTENIDO (Se adapta a la altura del texto) ── -->
+    <!-- ── ÁREA DE CONTENIDO (se adapta a la altura del contenido) ── -->
     <main class="content-area" id="content-area">
-      <div class="idle-state" id="idle-state" style="display: none;"></div>
 
-      <!-- Menú de Selección de Módulos -->
+      <!-- Menú de módulos -->
       <div class="tools-view" id="tools-tray" style="display: none;">
-        <div class="tools-section-title">Módulos del Sistema</div>
+        <div class="tools-section-title">Módulos del sistema</div>
         <div class="tools-grid">
           <button id="btn-toggle-history" class="tool-tile">
-            <span class="tool-tile-icon">📋</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">📋</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Historial</span>
               <span class="tool-tile-desc">Tareas y consultas previas</span>
-            </div>
+            </span>
           </button>
 
           <button id="btn-toggle-scheduler" class="tool-tile">
-            <span class="tool-tile-icon">⏰</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">⏰</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Agenda</span>
               <span class="tool-tile-desc">Recordatorios activos</span>
-            </div>
+            </span>
           </button>
 
           <button id="btn-toggle-subagents" class="tool-tile">
-            <span class="tool-tile-icon">⚡</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">⚡</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Subagentes <span class="badge" id="subagents-count-badge"
                   style="display:none;">0</span></span>
               <span class="tool-tile-desc">Procesos en segundo plano</span>
-            </div>
+            </span>
           </button>
 
           <button id="btn-toggle-memory" class="tool-tile">
-            <span class="tool-tile-icon">🧠</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">🧠</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Memoria</span>
               <span class="tool-tile-desc">Editar .jarvis/MEMORY.md</span>
-            </div>
+            </span>
           </button>
 
           <button id="btn-toggle-security" class="tool-tile">
-            <span class="tool-tile-icon">🛡️</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">🛡️</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Permisos</span>
               <span class="tool-tile-desc">Reglas y comandos seguros</span>
-            </div>
+            </span>
           </button>
 
           <button id="native-tts-btn" class="tool-tile">
-            <span class="tool-tile-icon" id="voice-indicator">🔊</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" id="voice-indicator" aria-hidden="true">🔊</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Voz JARVIS</span>
               <span class="tool-tile-desc">Velocidad: <strong id="voice-speed-badge">1.35x</strong></span>
-            </div>
+            </span>
           </button>
 
           <button id="native-wakeword-btn" class="tool-tile active">
-            <span class="tool-tile-icon">🎙️</span>
-            <div class="tool-tile-text">
+            <span class="tool-tile-icon" aria-hidden="true">🎙️</span>
+            <span class="tool-tile-text">
               <span class="tool-tile-title">Hey JARVIS</span>
               <span class="tool-tile-desc">Detección de voz activa</span>
-            </div>
+            </span>
           </button>
         </div>
       </div>
 
-      <!-- Panel de Respuesta Adaptativo (Se ajusta al tamaño del texto) -->
+      <!-- Respuesta -->
       <div class="stream-panel" id="response-panel" style="display: none;">
         <div class="stream-prompt-tag" id="stream-prompt"></div>
-        <div class="stream-content" id="response-body"></div>
+        <div class="stream-content" id="response-body" aria-busy="false"></div>
         <div class="stream-actions">
           <button id="btn-copy-response" class="stream-action-btn">Copiar</button>
           <button id="btn-clear-response" class="stream-action-btn">Limpiar</button>
@@ -160,96 +169,101 @@
       </div>
 
       <!-- Drawer: Historial -->
-      <div class="drawer-panel" id="history-drawer" style="display: none;">
+      <section class="drawer-panel" id="history-drawer" aria-label="Historial de tareas" style="display: none;">
         <div class="drawer-header">
           <span class="drawer-title">Historial de tareas</span>
           <span class="drawer-badge" id="history-count">0</span>
-          <button id="btn-close-history" class="icon-btn drawer-close-btn" title="Volver al menú de módulos">✕</button>
+          <button id="btn-close-history" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
+            aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
         </div>
         <div class="flat-list" id="history-list">
           <div class="flat-empty">Sin historial registrado.</div>
         </div>
-      </div>
+      </section>
 
       <!-- Drawer: Memoria -->
-      <div class="drawer-panel" id="memory-drawer" style="display: none;">
+      <section class="drawer-panel" id="memory-drawer" aria-label="Memoria persistente" style="display: none;">
         <div class="drawer-header">
           <span class="drawer-title">Memoria persistente (.jarvis/MEMORY.md)</span>
           <div class="drawer-actions">
             <button id="btn-save-memory" class="flat-btn primary">Guardar</button>
-            <button id="btn-close-memory" class="icon-btn drawer-close-btn" title="Volver al menú de módulos">✕</button>
+            <button id="btn-close-memory" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
+              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
-        <textarea id="memory-editor" class="flat-textarea" spellcheck="false"
+        <textarea id="memory-editor" class="flat-textarea" spellcheck="false" aria-label="Contenido de MEMORY.md"
           placeholder="Cargando memoria..."></textarea>
-      </div>
+      </section>
 
       <!-- Drawer: Seguridad -->
-      <div class="drawer-panel" id="security-drawer" style="display: none;">
+      <section class="drawer-panel" id="security-drawer" aria-label="Permisos y seguridad" style="display: none;">
         <div class="drawer-header">
           <div class="drawer-header-info">
-            <span class="drawer-title">Permisos & Seguridad</span>
+            <span class="drawer-title">Permisos y seguridad</span>
             <span class="drawer-badge">.jarvis/permissions.json</span>
           </div>
           <div class="drawer-actions">
             <button id="btn-save-security" class="flat-btn primary">Guardar</button>
-            <button id="btn-close-security" class="icon-btn drawer-close-btn"
-              title="Volver al menú de módulos">✕</button>
+            <button id="btn-close-security" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
+              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
 
         <div class="security-body">
           <label class="security-toggle-card">
             <input type="checkbox" id="chk-auto-approve" class="security-checkbox" checked />
-            <div class="security-toggle-content">
+            <span class="security-toggle-content">
               <span class="security-toggle-title">Auto-aprobar comandos seguros</span>
               <span class="security-toggle-desc">Permite lecturas y diagnósticos sin solicitar autorización
                 previa</span>
-            </div>
+            </span>
           </label>
 
           <div class="security-rules-group">
             <div class="security-rules-header">
-              <span class="rules-label">Comandos restringidos</span>
+              <label class="rules-label" for="security-patterns-editor">Comandos restringidos</label>
               <span class="rules-hint">Siempre requerirán confirmación (uno por línea)</span>
             </div>
             <textarea id="security-patterns-editor" class="security-textarea" spellcheck="false"
               placeholder="del&#10;rmdir&#10;remove-item&#10;format&#10;curl..."></textarea>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Drawer: Agenda -->
-      <div class="drawer-panel" id="scheduler-drawer" style="display: none;">
+      <section class="drawer-panel" id="scheduler-drawer" aria-label="Agenda y recordatorios" style="display: none;">
         <div class="drawer-header">
           <span class="drawer-title">Agenda y recordatorios</span>
           <span class="drawer-badge" id="reminders-count">0</span>
           <div class="drawer-actions">
-            <button id="btn-refresh-scheduler" class="icon-btn">↻</button>
-            <button id="btn-close-scheduler" class="icon-btn drawer-close-btn"
-              title="Volver al menú de módulos">✕</button>
+            <button id="btn-refresh-scheduler" class="icon-btn" title="Actualizar" aria-label="Actualizar"><span
+                aria-hidden="true">↻</span></button>
+            <button id="btn-close-scheduler" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
+              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
         <div class="flat-list" id="reminders-list">
           <div class="flat-empty">No hay recordatorios pendientes.</div>
         </div>
-      </div>
+      </section>
 
       <!-- Drawer: Subagentes -->
-      <div class="drawer-panel" id="subagents-drawer" style="display: none;">
+      <section class="drawer-panel" id="subagents-drawer" aria-label="Subagentes en segundo plano"
+        style="display: none;">
         <div class="drawer-header">
           <span class="drawer-title">Subagentes en segundo plano</span>
           <span class="drawer-badge" id="subagents-count">0</span>
           <div class="drawer-actions">
-            <button id="btn-refresh-subagents" class="icon-btn">↻</button>
-            <button id="btn-close-subagents" class="icon-btn drawer-close-btn"
-              title="Volver al menú de módulos">✕</button>
+            <button id="btn-refresh-subagents" class="icon-btn" title="Actualizar" aria-label="Actualizar"><span
+                aria-hidden="true">↻</span></button>
+            <button id="btn-close-subagents" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
+              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
         <div class="flat-list" id="subagents-list">
           <div class="flat-empty">No hay subagentes activos.</div>
         </div>
-      </div>
+      </section>
     </main>
 
     <!-- Elemento oculto para compatibilidad con ui.js -->
