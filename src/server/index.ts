@@ -47,26 +47,30 @@ const voiceASR = new OllamaASR(
   }
 );
 
-// GPU name is resolved lazily on the first /api/status call,
-// not at startup, so it never blocks module initialization.
-let _cachedGpuName: string | null = null;
-async function getGpuName(): Promise<string> {
-  if (_cachedGpuName !== null) return _cachedGpuName;
-  try {
-    if (process.platform === 'win32') {
-      const { execSync } = await import('child_process');
-      const out = execSync(
-        'powershell -Command "(Get-CimInstance Win32_VideoController).Name"',
-        { encoding: 'utf-8', timeout: 3000 }
-      );
-      _cachedGpuName = out.trim().split('\r\n').filter(Boolean).join(', ');
-    } else {
-      _cachedGpuName = 'N/A';
-    }
-  } catch {
-    _cachedGpuName = 'NVIDIA GeForce RTX 3070 Ti';
-  }
-  return _cachedGpuName;
+// GPU name is resolved asynchronously in the background, never blocking API routes.
+let _cachedGpuName = 'Detectando GPU...';
+if (process.platform === 'win32') {
+  import('child_process').then(({ exec }) => {
+    exec(
+      'powershell -NoProfile -Command "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join \', \'"',
+      { timeout: 3000 },
+      (err, stdout) => {
+        if (!err && stdout && stdout.trim()) {
+          _cachedGpuName = stdout.trim();
+        } else {
+          _cachedGpuName = 'GPU de Sistema';
+        }
+      }
+    );
+  }).catch(() => {
+    _cachedGpuName = 'GPU de Sistema';
+  });
+} else {
+  _cachedGpuName = 'N/A';
+}
+
+function getGpuName(): Promise<string> {
+  return Promise.resolve(_cachedGpuName);
 }
 
 // ─── API routes ──────────────────────────────────────────────────────────────

@@ -3,11 +3,13 @@ import { RiskLevel, ToolExecutionContext, ToolResult } from '../types.js';
 import { spawn } from 'child_process';
 
 /**
- * Helper to run a PowerShell script safely via stdin without CLI quoting issues
+ * Helper to run a PowerShell script safely via UTF-16LE Base64 -EncodedCommand
  */
-function runPowerShellScript(script: string, timeoutMs: number = 8000): Promise<{ stdout: string; stderr: string; code: number }> {
+function runPowerShellScript(script: string, timeoutMs: number = 6000): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
+    const fullScript = `$ProgressPreference = 'SilentlyContinue'\n${script}`;
+    const encoded = Buffer.from(fullScript, 'utf16le').toString('base64');
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
       windowsHide: true,
     });
 
@@ -38,9 +40,6 @@ function runPowerShellScript(script: string, timeoutMs: number = 8000): Promise<
       clearTimeout(timer);
       resolve({ stdout, stderr: err.message, code: -1 });
     });
-
-    child.stdin.write(script, 'utf-8');
-    child.stdin.end();
   });
 }
 

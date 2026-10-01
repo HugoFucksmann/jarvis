@@ -12,7 +12,7 @@ cd /d "e:\colo\rocco"
 curl -s http://127.0.0.1:11434/api/tags >nul 2>&1
 if %errorlevel% neq 0 (
     echo [*] Iniciando servicio Ollama en segundo plano...
-    start /b ollama serve
+    start "" /min ollama serve
     ping 127.0.0.1 -n 3 >nul
 )
 
@@ -20,8 +20,8 @@ if %errorlevel% neq 0 (
 curl -s http://127.0.0.1:3000/api/status >nul 2>&1
 if %errorlevel% neq 0 (
     echo [*] Iniciando nucleo del agente...
-    start /b npm run dev
-    ping 127.0.0.1 -n 4 >nul
+    start "" /b npm run dev
+    ping 127.0.0.1 -n 3 >nul
 )
 
 :: 3. Lanzar la aplicacion 100% NATIVA en Electron

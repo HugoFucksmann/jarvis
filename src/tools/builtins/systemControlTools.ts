@@ -37,9 +37,11 @@ export class ClipboardTool extends BaseTool {
     try {
       if (process.platform === 'win32') {
         if (action === 'get') {
-          const { stdout } = await execAsync('powershell -NoProfile -Command "Get-Clipboard"', {
+          const script = `$ProgressPreference = 'SilentlyContinue'\nGet-Clipboard`;
+          const encoded = Buffer.from(script, 'utf16le').toString('base64');
+          const { stdout } = await execAsync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
             encoding: 'utf-8',
-            timeout: 5000,
+            timeout: 4000,
           });
           const content = stdout.trim();
           return {
@@ -55,34 +57,26 @@ export class ClipboardTool extends BaseTool {
           if (!text) {
             return { success: false, error: 'Se requiere el parámetro "text" para la acción "set".' };
           }
-          // Use stdin pipe with Set-Clipboard to avoid escaping issues with complex characters
-          return new Promise((resolve) => {
-            const child = spawn('powershell.exe', ['-NoProfile', '-Command', 'Set-Clipboard'], {
-              windowsHide: true,
-            });
-            child.stdin.write(text, 'utf-8');
-            child.stdin.end();
-            child.on('close', (code) => {
-              if (code === 0) {
-                resolve({
-                  success: true,
-                  data: {
-                    message: 'Texto copiado exitosamente al portapapeles del sistema.',
-                    preview: text.length > 80 ? text.substring(0, 80) + '...' : text,
-                  },
-                });
-              } else {
-                resolve({ success: false, error: `Error estableciendo portapapeles (código ${code})` });
-              }
-            });
-            child.on('error', (err) => {
-              resolve({ success: false, error: `Error en proceso de portapapeles: ${err.message}` });
-            });
+          const script = `$ProgressPreference = 'SilentlyContinue'\nSet-Clipboard -Value @'\n${text}\n'@`;
+          const encoded = Buffer.from(script, 'utf16le').toString('base64');
+          await execAsync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+            timeout: 4000,
           });
+          return {
+            success: true,
+            data: {
+              message: 'Texto copiado exitosamente al portapapeles del sistema.',
+              preview: text.length > 80 ? text.substring(0, 80) + '...' : text,
+            },
+          };
         }
 
         if (action === 'clear') {
-          await execAsync('powershell -NoProfile -Command "Set-Clipboard -Value $null"');
+          const script = `$ProgressPreference = 'SilentlyContinue'\nSet-Clipboard -Value $null`;
+          const encoded = Buffer.from(script, 'utf16le').toString('base64');
+          await execAsync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+            timeout: 4000,
+          });
           return { success: true, data: { message: 'Portapapeles vaciado correctamente.' } };
         }
       } else {
@@ -147,15 +141,16 @@ export class VolumeControlTool extends BaseTool {
         }
 
         const script = `
-          $w = New-Object -ComObject WScript.Shell
-          for ($i = 0; $i -lt ${loopCount}; $i++) {
-            $w.SendKeys([char]${charCode})
-            Start-Sleep -Milliseconds 20
-          }
-        `;
-
-        await execAsync(`powershell -NoProfile -Command "${script.replace(/\r?\n/g, ' ')}"`, {
-          timeout: 5000,
+$ProgressPreference = 'SilentlyContinue'
+$w = New-Object -ComObject WScript.Shell
+for ($i = 0; $i -lt ${loopCount}; $i++) {
+    $w.SendKeys([char]${charCode})
+    Start-Sleep -Milliseconds 15
+}
+`;
+        const encoded = Buffer.from(script, 'utf16le').toString('base64');
+        await execAsync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+          timeout: 4000,
         });
 
         const actionText =
@@ -216,19 +211,26 @@ export class NotificationTool extends BaseTool {
         const cleanMsg = rawMessage.trim().replace(/'/g, "''");
 
         const psScript = `
-          [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-          $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-          $xml = [xml]$template.GetXml()
-          $xml.GetElementsByTagName('text')[0].AppendChild($xml.CreateTextNode('${cleanTitle}')) | Out-Null
-          $xml.GetElementsByTagName('text')[1].AppendChild($xml.CreateTextNode('${cleanMsg}')) | Out-Null
-          $doc = New-Object Windows.Data.Xml.Dom.XmlDocument
-          $doc.LoadXml($xml.OuterXml)
-          $toast = [Windows.UI.Notifications.ToastNotification]::new($doc)
-          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('JARVIS').Show($toast)
-        `;
-
-        await execAsync(`powershell -NoProfile -Command "${psScript.replace(/\r?\n/g, ' ')}"`, {
-          timeout: 6000,
+$ProgressPreference = 'SilentlyContinue'
+try {
+    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+    $xml = [xml]$template.GetXml()
+    $xml.GetElementsByTagName('text')[0].AppendChild($xml.CreateTextNode('${cleanTitle}')) | Out-Null
+    $xml.GetElementsByTagName('text')[1].AppendChild($xml.CreateTextNode('${cleanMsg}')) | Out-Null
+    $doc = New-Object Windows.Data.Xml.Dom.XmlDocument
+    $doc.LoadXml($xml.OuterXml)
+    $toast = [Windows.UI.Notifications.ToastNotification]::new($doc)
+    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('JARVIS').Show($toast)
+} catch {
+    # Fallback to system modal message if notification runtime unavailable
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show('${cleanMsg}', '${cleanTitle}') | Out-Null
+}
+`;
+        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+        await execAsync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+          timeout: 5000,
         });
 
         return {
