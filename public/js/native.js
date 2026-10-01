@@ -1,6 +1,5 @@
 /**
- * native.js — Orchestrator and entry point for JARVIS native Electron HUD.
- * Coordinates UI, WebSocket, Audio ASR/TTS, and Drawers via modular sub-systems.
+ * native.js — Orquestador nativo para JARVIS.
  */
 
 import { state, dom } from './modules/state.js';
@@ -17,83 +16,140 @@ import { bindSchedulerEvents } from './modules/scheduler.js';
 import { initSubagentsDrawer } from './modules/subagents.js';
 
 const sessionId = 'native_' + Date.now();
+const DRAWER_MODES = new Set(['history', 'memory', 'security', 'scheduler', 'subagents']);
 
-// ── Quick suggestions pill buttons ───────────────────────────────────────────
-document.querySelectorAll('.pill-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const prompt = btn.getAttribute('data-prompt');
-    if (prompt && dom.input) {
-      dom.input.value = prompt;
-      sendPrompt(sessionId);
+const btnTools = document.getElementById('btn-toggle-tools');
+const toolsTray = document.getElementById('tools-tray');
+
+// ── Control Centralizado del Menú de Módulos ──────────────────────────────────
+function openToolsMenu() {
+  setMode('idle'); // Oculta cualquier drawer activo
+  dom.container.dataset.mode = 'tools';
+  if (toolsTray) toolsTray.style.display = 'flex';
+  if (btnTools) btnTools.classList.add('active');
+}
+
+function closeToolsMenu() {
+  if (toolsTray) toolsTray.style.display = 'none';
+  if (btnTools) btnTools.classList.remove('active');
+  setMode('idle');
+}
+
+function updateToolsIconState() {
+  const currentMode = dom.container.dataset.mode;
+  const isToolsOrDrawerOpen = currentMode === 'tools' || DRAWER_MODES.has(currentMode);
+  if (btnTools) {
+    btnTools.classList.toggle('active', isToolsOrDrawerOpen);
+  }
+}
+
+// ── Toggle con el Ícono de Módulos ───────────────────────────────────────────
+if (btnTools) {
+  btnTools.addEventListener('click', () => {
+    const currentMode = dom.container.dataset.mode;
+    const isAnyPanelOpen = currentMode === 'tools' || DRAWER_MODES.has(currentMode);
+
+    if (isAnyPanelOpen) {
+      closeToolsMenu();
+    } else {
+      openToolsMenu();
     }
+  });
+}
+
+// Al seleccionar cualquier módulo del grid, ocultar el grid y mantener el ícono encendido
+document.querySelectorAll('.tool-tile').forEach((tile) => {
+  tile.addEventListener('click', () => {
+    if (toolsTray) toolsTray.style.display = 'none';
+    setTimeout(updateToolsIconState, 20);
   });
 });
 
-// ── Send Prompt Interactions ──────────────────────────────────────────────────
+// Interceptar las ✕ de los drawers para que SIEMPRE vuelvan a la lista de módulos
+document.querySelectorAll('.drawer-close-btn').forEach((closeBtn) => {
+  closeBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    openToolsMenu();
+  }, true);
+});
+
+// ── Enviar mensajes ──────────────────────────────────────────────────────────
 if (dom.sendBtn) {
-  dom.sendBtn.addEventListener('click', () => sendPrompt(sessionId));
+  dom.sendBtn.addEventListener('click', () => {
+    closeToolsMenu();
+    sendPrompt(sessionId);
+  });
 }
 
 if (dom.input) {
   dom.input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+      closeToolsMenu();
       sendPrompt(sessionId);
     }
   });
 }
 
-// ── Adaptive Esc Hotkey Hierarchy ─────────────────────────────────────────────
-const DRAWER_MODES = new Set(['history', 'memory', 'security', 'scheduler', 'subagents']);
-
+// ── Jerarquía Adaptativa de Escape ────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     e.preventDefault();
 
-    // 1. If any drawer is open, close it back to previous mode
     const currentMode = dom.container.dataset.mode;
+
+    // 1. Si está dentro de un drawer (Historial, Seguridad, etc.), volver al menú de módulos
     if (DRAWER_MODES.has(currentMode)) {
-      setMode(state.rawResponse ? 'responding' : 'idle');
+      openToolsMenu();
       return;
     }
 
-    // 2. If approval overlay is visible, deny
+    // 2. Si el menú de módulos está abierto, cerrarlo y replegar a idle
+    if (currentMode === 'tools' || (toolsTray && toolsTray.style.display === 'flex')) {
+      closeToolsMenu();
+      return;
+    }
+
+    // 3. Denegar si hay confirmación de seguridad pendiente
     if (state.pendingApprovalId) {
       answerApproval(false);
       return;
     }
 
-    // 3. If speech is actively synthesizing, mute
+    // 4. Silenciar síntesis de voz activa
     if (state.isSpeaking) {
       stopSpeech();
       return;
     }
 
-    // 4. If agent task is executing, abort it
+    // 5. Cancelar tarea en ejecución
     if (state.isExecuting) {
       abortTask();
       return;
     }
 
-    // 5. If response is displayed, clear it
+    // 6. Limpiar respuesta en pantalla
     if (currentMode === 'responding') {
       clearResponse();
+      closeToolsMenu();
       return;
     }
 
-    // 6. If input has text, empty it
+    // 7. Limpiar input si contiene texto
     if (dom.input && dom.input.value) {
       dom.input.value = '';
       return;
     }
 
-    // 7. If totally idle, hide Electron window
+    // 8. En estado idle total, ocultar ventana nativa
     if (window.electronAPI && typeof window.electronAPI.hide === 'function') {
       window.electronAPI.hide();
     }
   }
 });
 
-// ── Window and Task Control Buttons ───────────────────────────────────────────
+// ── Botones de Control de Ventana ─────────────────────────────────────────────
 if (dom.closeBtn) {
   dom.closeBtn.addEventListener('click', () => {
     stopSpeech();
@@ -108,26 +164,26 @@ if (dom.abortBtn) {
 }
 
 if (dom.clearBtn) {
-  dom.clearBtn.addEventListener('click', clearResponse);
+  dom.clearBtn.addEventListener('click', () => {
+    clearResponse();
+    closeToolsMenu();
+  });
 }
 
 if (dom.copyBtn) {
   dom.copyBtn.addEventListener('click', () => {
     if (state.rawResponse) {
       navigator.clipboard.writeText(state.rawResponse);
+      const originalText = dom.copyBtn.textContent;
       dom.copyBtn.textContent = '¡Copiado!';
       setTimeout(() => {
-        dom.copyBtn.innerHTML = `
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg> Copiar`;
+        dom.copyBtn.textContent = originalText;
       }, 1500);
     }
   });
 }
 
-// ── External links inside responses ───────────────────────────────────────────
+// ── Enlaces externos seguros ──────────────────────────────────────────────────
 if (dom.body) {
   dom.body.addEventListener('click', (e) => {
     const link = e.target.closest('a');
@@ -138,18 +194,19 @@ if (dom.body) {
   });
 }
 
-// ── Bind Feature Modules ──────────────────────────────────────────────────────
+// ── Inicialización de Módulos ─────────────────────────────────────────────────
 bindTTSControls();
 
 bindVoiceEvents((transcribedText) => {
   if (dom.input) {
     dom.input.value = transcribedText;
+    closeToolsMenu();
     sendPrompt(sessionId);
   }
 });
 
 bindHistoryEvents((selectedPrompt) => {
-  setMode('idle');
+  closeToolsMenu();
   if (dom.input) {
     dom.input.value = selectedPrompt;
     sendPrompt(sessionId);
@@ -168,3 +225,4 @@ initTTS();
 updateSpeedUI();
 setupWakeWord();
 setMode('idle');
+closeToolsMenu();
