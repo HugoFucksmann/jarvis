@@ -20,6 +20,16 @@ import {
 } from './systemControlTools.js';
 import { InputSimulationTool } from './guiAutomationTools.js';
 import { WindowControlTool } from './windowControlTools.js';
+import { TakeScreenshotTool, AnalyzeImageTool } from './visionTools.js';
+import { MediaControlTool } from './mediaTools.js';
+import { ScheduleTaskTool } from './schedulerTools.js';
+import {
+  DelegateSubagentTool,
+  ListSubagentsTool,
+  GetSubagentOutputTool,
+  CancelSubagentTool,
+} from './subagentTools.js';
+import { BrowseWebTool } from './browserNavigationTools.js';
 import { config } from '../../config/index.js';
 
 export function getBuiltinTools(): ITool[] {
@@ -43,6 +53,7 @@ export function getBuiltinTools(): ITool[] {
     // Browser & Applications tools
     new OpenUrlTool(),
     new OpenApplicationTool(),
+    new BrowseWebTool(),
 
     // System Control & OS Hardware tools
     new ClipboardTool(),
@@ -53,6 +64,22 @@ export function getBuiltinTools(): ITool[] {
     // GUI Automation & Window Management tools (Phase 2)
     new InputSimulationTool(),
     new WindowControlTool(),
+
+    // Visual Perception & Screen Capture tools (Phase 3)
+    new TakeScreenshotTool(),
+    new AnalyzeImageTool(),
+
+    // Media & Music Control tools (Phase 6 - Spotify & YouTube)
+    new MediaControlTool(),
+
+    // Scheduler, Reminders & Sticky Notes (Phase 7)
+    new ScheduleTaskTool(),
+
+    // Background Subagents & Asynchronous Workers (Phase 8)
+    new DelegateSubagentTool(),
+    new ListSubagentsTool(),
+    new GetSubagentOutputTool(),
+    new CancelSubagentTool(),
 
     // Persistent cross-chat memory tool
     new ManageMemoryTool(),

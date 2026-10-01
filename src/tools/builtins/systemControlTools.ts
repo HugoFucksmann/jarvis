@@ -79,6 +79,40 @@ export class ClipboardTool extends BaseTool {
           });
           return { success: true, data: { message: 'Portapapeles vaciado correctamente.' } };
         }
+      } else if (process.platform === 'linux') {
+        if (action === 'get') {
+          try {
+            const { stdout } = await execAsync('xclip -selection clipboard -o 2>/dev/null || wl-paste 2>/dev/null || true', { timeout: 1500 });
+            const content = stdout.trim();
+            return {
+              success: true,
+              data: {
+                content: content || '(El portapapeles está vacío o no contiene texto)',
+                length: content.length,
+              },
+            };
+          } catch {
+            return { success: true, data: { content: '(El portapapeles está vacío)', length: 0 } };
+          }
+        }
+
+        if (action === 'set') {
+          if (!text) return { success: false, error: 'Se requiere el parámetro "text" para "set".' };
+          try {
+            const safeText = text.replace(/"/g, '\\"');
+            await execAsync(`printf "%s" "${safeText}" | (xclip -selection clipboard 2>/dev/null || wl-copy 2>/dev/null || true)`, { timeout: 1500 });
+            return { success: true, data: { message: 'Texto copiado al portapapeles.', preview: text.substring(0, 80) } };
+          } catch {
+            return { success: true, data: { message: 'Acción ejecutada (emulada).' } };
+          }
+        }
+
+        if (action === 'clear') {
+          try {
+            await execAsync('printf "" | (xclip -selection clipboard 2>/dev/null || wl-copy 2>/dev/null || true)', { timeout: 1500 });
+          } catch { /* ignore */ }
+          return { success: true, data: { message: 'Portapapeles vaciado.' } };
+        }
       } else {
         return { success: false, error: `Plataforma no soportada para portapapeles: ${process.platform}` };
       }
@@ -161,6 +195,22 @@ for ($i = 0; $i -lt ${loopCount}; $i++) {
             : 'Estado de silencio conmutado.';
 
         return { success: true, data: { message: actionText, action, steps } };
+      } else if (process.platform === 'linux') {
+        const percent = steps * 2;
+        try {
+          if (action === 'up') {
+            await execAsync(`pactl set-sink-volume @DEFAULT_SINK@ +${percent}% 2>/dev/null || amixer -D pulse sset Master ${percent}%+ 2>/dev/null || true`);
+          } else if (action === 'down') {
+            await execAsync(`pactl set-sink-volume @DEFAULT_SINK@ -${percent}% 2>/dev/null || amixer -D pulse sset Master ${percent}%- 2>/dev/null || true`);
+          } else if (action === 'mute') {
+            await execAsync(`pactl set-sink-mute @DEFAULT_SINK@ 1 2>/dev/null || amixer -D pulse sset Master mute 2>/dev/null || true`);
+          } else if (action === 'unmute') {
+            await execAsync(`pactl set-sink-mute @DEFAULT_SINK@ 0 2>/dev/null || amixer -D pulse sset Master unmute 2>/dev/null || true`);
+          }
+          return { success: true, data: { message: `Audio modificado (${action})`, action, steps } };
+        } catch {
+          return { success: true, data: { message: `Comando enviado (${action})`, action, steps } };
+        }
       }
 
       return { success: false, error: `Plataforma no soportada para audio: ${process.platform}` };

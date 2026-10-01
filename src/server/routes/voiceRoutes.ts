@@ -48,5 +48,21 @@ export function createVoiceRoutes(voiceASR: OllamaASR): Router {
     }
   });
 
+  router.get('/wakeword', (_req, res) => {
+    res.json({
+      enabled: config.wakeWord.enabled,
+      keywords: config.wakeWord.keywords,
+      autoDismissSeconds: config.wakeWord.autoDismissSeconds,
+    });
+  });
+
+  router.post('/wakeword/toggle', (req, res) => {
+    const { enabled } = req.body as { enabled?: boolean };
+    const newStatus = enabled !== undefined ? !!enabled : !config.wakeWord.enabled;
+    config.wakeWord.enabled = newStatus;
+    logger.info(`Wake word detection toggled: ${newStatus ? 'ENABLED' : 'DISABLED'}`);
+    res.json({ success: true, enabled: config.wakeWord.enabled });
+  });
+
   return router;
 }

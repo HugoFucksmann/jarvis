@@ -12,6 +12,9 @@ import { bindMemoryEvents } from './modules/memory.js';
 import { bindSecurityEvents } from './modules/security.js';
 import { bindApprovalEvents, answerApproval } from './modules/approvals.js';
 import { initWS, sendPrompt, abortTask, clearResponse } from './modules/ws.js';
+import { setupWakeWord } from './modules/wakeword.js';
+import { bindSchedulerEvents } from './modules/scheduler.js';
+import { initSubagentsDrawer } from './modules/subagents.js';
 
 const sessionId = 'native_' + Date.now();
 
@@ -40,13 +43,15 @@ if (dom.input) {
 }
 
 // ── Adaptive Esc Hotkey Hierarchy ─────────────────────────────────────────────
+const DRAWER_MODES = new Set(['history', 'memory', 'security', 'scheduler', 'subagents']);
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     e.preventDefault();
 
-    // 1. If drawer is open, close it back to previous mode
+    // 1. If any drawer is open, close it back to previous mode
     const currentMode = dom.container.dataset.mode;
-    if (currentMode === 'history' || currentMode === 'memory' || currentMode === 'security') {
+    if (DRAWER_MODES.has(currentMode)) {
       setMode(state.rawResponse ? 'responding' : 'idle');
       return;
     }
@@ -154,9 +159,12 @@ bindHistoryEvents((selectedPrompt) => {
 bindMemoryEvents();
 bindSecurityEvents();
 bindApprovalEvents();
+bindSchedulerEvents();
+initSubagentsDrawer();
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 initWS(sessionId);
 initTTS();
 updateSpeedUI();
+setupWakeWord();
 setMode('idle');

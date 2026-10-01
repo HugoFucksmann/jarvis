@@ -49,11 +49,42 @@
           </svg>
         </button>
 
+        <!-- Wake Word Passive Detection Button ("Hey JARVIS") -->
+        <button id="native-wakeword-btn" class="action-btn wakeword-btn active" title="Detección 'Hey JARVIS' activa (Clic para pausar)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 10v4"/>
+            <path d="M6 7v10"/>
+            <path d="M10 4v16"/>
+            <path d="M14 7v10"/>
+            <path d="M18 10v4"/>
+            <path d="M22 12v0"/>
+          </svg>
+          <span class="btn-badge wakeword-badge">WAKE</span>
+        </button>
+
         <!-- Task History Button (Minimizable drawer) -->
         <button id="btn-toggle-history" class="action-btn" title="Historial de tareas realizadas">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
+        </button>
+
+        <!-- Schedule & Reminders Button (Drawer) -->
+        <button id="btn-toggle-scheduler" class="action-btn" title="Agenda, Recordatorios y Notas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </button>
+
+        <!-- Background Subagents Button (Drawer) -->
+        <button id="btn-toggle-subagents" class="action-btn" title="Subagentes y tareas en segundo plano">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          <span class="btn-badge" id="subagents-count-badge" style="display:none;">0</span>
         </button>
 
         <!-- General Memory Button -->
@@ -198,6 +229,40 @@
             Los siguientes comandos y palabras clave <strong>SIEMPRE requerirán tu autorización</strong> (uno por línea):
           </div>
           <textarea id="security-patterns-editor" class="memory-textarea" spellcheck="false" placeholder="del&#10;rmdir&#10;remove-item&#10;format..."></textarea>
+        </div>
+      </div>
+
+      <!-- Scheduler & Reminders Panel -->
+      <div class="drawer-panel" id="scheduler-drawer" style="display: none;">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <span>⏰ Agenda & Recordatorios Activos</span>
+            <span class="drawer-badge" id="reminders-count">0</span>
+          </div>
+          <div class="drawer-header-actions">
+            <button id="btn-refresh-scheduler" class="drawer-action-btn" title="Actualizar">↻</button>
+            <button id="btn-close-scheduler" class="drawer-close" title="Ocultar agenda">✕</button>
+          </div>
+        </div>
+        <div class="history-list" id="reminders-list">
+          <div class="history-empty">Cargando recordatorios...</div>
+        </div>
+      </div>
+
+      <!-- Subagents & Background Tasks Panel -->
+      <div class="drawer-panel" id="subagents-drawer" style="display: none;">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <span>⚡ Subagentes en Segundo Plano</span>
+            <span class="drawer-badge" id="subagents-count">0</span>
+          </div>
+          <div class="drawer-header-actions">
+            <button id="btn-refresh-subagents" class="drawer-action-btn" title="Actualizar">↻</button>
+            <button id="btn-close-subagents" class="drawer-close" title="Ocultar subagentes">✕</button>
+          </div>
+        </div>
+        <div class="history-list" id="subagents-list">
+          <div class="history-empty">No hay subagentes activos en este momento.</div>
         </div>
       </div>
     </main>

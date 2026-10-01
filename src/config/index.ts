@@ -35,6 +35,18 @@ export interface JarvisConfig {
     numPredict: number;
     numCtx: number;
   };
+  vision: {
+    model: string;
+    device: 'cpu' | 'gpu';
+    keepAlive: string;
+    maxWidth: number;
+    quality: number;
+  };
+  wakeWord: {
+    enabled: boolean;
+    keywords: string[];
+    autoDismissSeconds: number;
+  };
   security: {
     autoApproveLowRisk: boolean;
     autoApproveMediumRisk: boolean;
@@ -60,6 +72,21 @@ export const config: JarvisConfig = {
     numPredict: parseInt(process.env.VOICE_NUM_PREDICT || '128', 10),
     numCtx: parseInt(process.env.VOICE_NUM_CTX || '2048', 10),
   },
+  vision: {
+    model: process.env.VISION_MODEL || process.env.OLLAMA_MODEL || 'qwen2.5-vl:7b',
+    device: (process.env.VISION_DEVICE === 'cpu' ? 'cpu' : 'gpu') as 'cpu' | 'gpu',
+    keepAlive: process.env.VISION_KEEP_ALIVE || '60m',
+    maxWidth: parseInt(process.env.VISION_MAX_WIDTH || '1920', 10),
+    quality: parseInt(process.env.VISION_QUALITY || '85', 10),
+  },
+  wakeWord: {
+    enabled: process.env.WAKE_WORD_ENABLED !== 'false',
+    keywords: (process.env.WAKE_WORD_KEYWORDS || 'hey jarvis,jarvis,oye jarvis,hola jarvis')
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean),
+    autoDismissSeconds: parseInt(process.env.WAKE_WORD_AUTO_DISMISS || '12', 10),
+  },
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
     host: process.env.HOST || '127.0.0.1',
@@ -72,7 +99,7 @@ export const config: JarvisConfig = {
     memoryEnabled: process.env.MEMORY_ENABLED !== 'false',
     webSearchEnabled: process.env.WEB_SEARCH_ENABLED !== 'false',
     voiceEnabled: process.env.VOICE_ENABLED !== 'false',
-    visionEnabled: process.env.VISION_ENABLED === 'true',
+    visionEnabled: process.env.VISION_ENABLED !== 'false',
   },
   security: {
     autoApproveLowRisk: process.env.AUTO_APPROVE_LOW_RISK !== 'false',
@@ -88,6 +115,18 @@ export function updateModelConfig(newModel: string): void {
 
 export function updateVoiceDeviceConfig(device: 'cpu' | 'gpu'): void {
   config.voice.device = device;
+}
+
+export function updateVisionDeviceConfig(device: 'cpu' | 'gpu'): void {
+  config.vision.device = device;
+}
+
+export function updateVisionModelConfig(newModel: string): void {
+  config.vision.model = newModel;
+}
+
+export function updateWakeWordConfig(enabled: boolean): void {
+  config.wakeWord.enabled = enabled;
 }
 
 export function updateThinkingConfig(thinking: boolean): void {

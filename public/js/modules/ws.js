@@ -7,6 +7,7 @@ import { setMode, setActivity, setReactorState, openExternalUrl } from './ui.js'
 import { formatMarkdown } from './markdown.js';
 import { feedSpeechToken, flushSpeechBuffer, speakChunk, stopSpeech } from './tts.js';
 import { showApproval } from './approvals.js';
+import { handleSubagentWsEvent } from './subagents.js';
 
 export function initWS(sessionId) {
   state.ws = new WebSocket(WS_URL);
@@ -37,6 +38,9 @@ export function handleMessage(type, payload) {
       break;
     case 'approval_required':
       showApproval(payload);
+      break;
+    case 'subagent_event':
+      handleSubagentWsEvent(payload);
       break;
     case 'task_finished':
       finishTask();

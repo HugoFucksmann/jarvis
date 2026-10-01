@@ -18,7 +18,7 @@ export const state = {
 };
 
 // ── Shared DOM references ─────────────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
+const $ = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
 export const dom = {
   container:       $('jarvis-container'),
@@ -42,22 +42,27 @@ export const dom = {
   clearBtn:        $('btn-clear-response'),
   footerHint:      $('footer-hint'),
   // Drawers
-  btnToggleHistory:  $('btn-toggle-history'),
-  btnToggleMemory:   $('btn-toggle-memory'),
-  btnToggleSecurity: $('btn-toggle-security'),
-  historyDrawer:     $('history-drawer'),
-  historyList:       $('history-list'),
-  historyCount:      $('history-count'),
-  btnCloseHistory:   $('btn-close-history'),
-  memoryDrawer:      $('memory-drawer'),
-  memoryEditor:      $('memory-editor'),
-  btnSaveMemory:     $('btn-save-memory'),
-  btnCloseMemory:    $('btn-close-memory'),
-  securityDrawer:    $('security-drawer'),
-  chkAutoApprove:    $('chk-auto-approve'),
-  securityEditor:    $('security-patterns-editor'),
-  btnSaveSecurity:   $('btn-save-security'),
-  btnCloseSecurity:  $('btn-close-security'),
+  btnToggleHistory:   $('btn-toggle-history'),
+  btnToggleMemory:    $('btn-toggle-memory'),
+  btnToggleSecurity:  $('btn-toggle-security'),
+  btnToggleScheduler: $('btn-toggle-scheduler'),
+  btnToggleSubagents: $('btn-toggle-subagents'),
+  historyDrawer:      $('history-drawer'),
+  historyList:        $('history-list'),
+  historyCount:       $('history-count'),
+  btnCloseHistory:    $('btn-close-history'),
+  memoryDrawer:       $('memory-drawer'),
+  memoryEditor:       $('memory-editor'),
+  btnSaveMemory:      $('btn-save-memory'),
+  btnCloseMemory:     $('btn-close-memory'),
+  securityDrawer:     $('security-drawer'),
+  chkAutoApprove:     $('chk-auto-approve'),
+  securityEditor:     $('security-patterns-editor'),
+  btnSaveSecurity:    $('btn-save-security'),
+  btnCloseSecurity:   $('btn-close-security'),
+  schedulerDrawer:    $('scheduler-drawer'),
+  subagentsDrawer:    $('subagents-drawer'),
+  subagentsCountBadge: $('subagents-count-badge'),
   // Approval
   approvalCard:  $('approval-card'),
   approvalTool:  $('approval-tool'),

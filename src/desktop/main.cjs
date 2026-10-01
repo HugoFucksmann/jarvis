@@ -71,6 +71,24 @@ function createWindow() {
       shell.openExternal(targetUrl);
     }
   });
+
+  ipcMain.on('jarvis:show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  ipcMain.on('jarvis:wakeWordTriggered', (_event, phrase) => {
+    console.log('[JARVIS Desktop] Wake word triggered:', phrase);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
   ipcMain.on('jarvis:hide', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.hide();

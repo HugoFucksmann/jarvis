@@ -74,5 +74,29 @@ export function createStatusRoutes({ agentCore, getGpuName }: StatusRouteDeps): 
     res.json({ logs: auditLogs });
   });
 
+  router.post('/tools/execute', async (req, res) => {
+    const { toolName, args } = req.body as { toolName?: string; args?: Record<string, unknown> };
+    if (!toolName) {
+      res.status(400).json({ success: false, error: 'Missing toolName parameter' });
+      return;
+    }
+    const tool = agentCore.getTools().getTool(toolName);
+    if (!tool) {
+      res.status(404).json({ success: false, error: `Tool "${toolName}" not found` });
+      return;
+    }
+    try {
+      const result = await agentCore.getTools().executeTool(toolName, args || {}, {
+        workspaceRoot: config.workspaceRoot,
+      });
+      res.json({ success: true, result });
+    } catch (err: unknown) {
+      res.status(500).json({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
   return router;
 }

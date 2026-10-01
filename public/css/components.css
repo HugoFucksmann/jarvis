@@ -1,0 +1,426 @@
+/**
+ * components.css — Compact Shared UI Components
+ * Tight paddings, crisp borders, streamlined form controls.
+ */
+
+/* ── Status Indicator ─────────────────────────────────────────────── */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-tertiary);
+  transition: background var(--transition-fast);
+}
+
+.status-dot.online  { background: var(--color-green); box-shadow: 0 0 5px var(--color-green); }
+.status-dot.offline { background: var(--color-red); }
+.status-dot.busy    { background: var(--color-amber); box-shadow: 0 0 5px var(--color-amber); }
+
+.status-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+/* ── Form Selects ─────────────────────────────────────────────────── */
+.hud-select {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+  height: 22px;
+  transition: border-color var(--transition-fast);
+}
+
+.hud-select:hover,
+.hud-select:focus {
+  border-color: var(--cyan-primary);
+}
+
+.hud-select option {
+  background: var(--bg-surface-elev);
+  color: var(--text-primary);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Primary */
+.btn-primary {
+  background: var(--cyan-primary);
+  color: #050a12;
+  font-weight: 600;
+  border-color: var(--cyan-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #33dcff;
+  box-shadow: 0 0 8px var(--cyan-glow);
+}
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* Danger */
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--color-red);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-red);
+  color: #ffffff;
+}
+
+/* ── Send & Mic buttons (compact) ─────────────────────────────────── */
+.btn-send {
+  background: var(--cyan-primary);
+  color: #060c18;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition-fast);
+}
+
+.btn-send:hover:not(:disabled) {
+  background: #38e1ff;
+  box-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.btn-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-mic {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  transition: all var(--transition-fast);
+}
+
+.btn-mic:hover {
+  border-color: var(--cyan-primary);
+  color: var(--cyan-primary);
+}
+
+.btn-mic.recording {
+  background: var(--red-dim);
+  border-color: var(--color-red);
+  color: var(--color-red);
+  animation: pulse-mic 1.2s infinite;
+}
+
+.btn-wakeword.active {
+  background: rgba(0, 240, 255, 0.08);
+  border-color: rgba(0, 240, 255, 0.35);
+  color: var(--cyan-primary);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+}
+
+.btn-wakeword.active svg {
+  animation: pulse-wave 2s infinite ease-in-out;
+}
+
+@keyframes pulse-wave {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 3px var(--cyan-primary)); }
+}
+
+@keyframes pulse-mic {
+  0%, 100% { box-shadow: none; }
+  50%       { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+}
+
+/* ── Form Inputs ──────────────────────────────────────────────────── */
+.hud-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-xs);
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.hud-input:focus {
+  border-color: var(--cyan-primary);
+}
+
+.hud-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Risk Badges ──────────────────────────────────────────────────── */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  border: 1px solid;
+  text-transform: uppercase;
+}
+
+.risk-badge.LOW {
+  background: var(--green-dim);
+  color: var(--color-green);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.risk-badge.MEDIUM {
+  background: var(--amber-dim);
+  color: var(--color-amber);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.risk-badge.HIGH {
+  background: var(--red-dim);
+  color: var(--color-red);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Compact Activity Strip ───────────────────────────────────────── */
+.activity-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  min-height: 26px;
+  flex-shrink: 0;
+}
+
+.activity-strip .status-glow {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-green);
+  box-shadow: 0 0 6px var(--color-green);
+}
+
+.activity-strip.running .status-glow {
+  background: var(--cyan-primary);
+  box-shadow: 0 0 8px var(--cyan-primary);
+}
+
+.activity-strip .activity-state {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.activity-strip .activity-detail {
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* ── Modal Backdrop & Card ────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.modal-card {
+  width: 90%;
+  max-width: 440px;
+  background: var(--bg-surface-elev);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.modal-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-card-header .modal-icon {
+  font-size: 16px;
+}
+
+.modal-card-header h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-card-body {
+  padding: 12px 14px;
+}
+
+.modal-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.modal-detail-row .lbl {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  min-width: 75px;
+}
+
+.modal-detail-row .val {
+  color: var(--text-primary);
+}
+
+.modal-code-block {
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.modal-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+/* Tool execution card */
+.tool-card {
+  margin: 6px 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tool-card-name {
+  color: var(--cyan-primary);
+  font-weight: 600;
+}
+
+.tool-card-body {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tool-card-body .result-data {
+  background: var(--bg-deep);
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+  max-height: 100px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+}

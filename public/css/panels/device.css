@@ -1,0 +1,179 @@
+/**
+ * panels/device.css — Device & PC Controls Panel Styles
+ * Compact, interactive widgets for Audio, Clipboard, System modifications, and Live Action Feed.
+ */
+
+.device-container {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Quick Control Cards Grid */
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.device-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.device-card:hover {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--border-default);
+}
+
+.device-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.device-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.device-card-status {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.device-card-status.muted {
+  background: var(--amber-dim);
+  color: var(--color-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.device-card-status.active {
+  background: var(--green-dim);
+  color: var(--color-green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.device-card-body {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.device-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* Feed Section */
+.device-feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-top: 4px;
+}
+
+.device-feed-title {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.device-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.device-action-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-subtle);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.device-action-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.device-action-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.device-action-title {
+  color: var(--text-primary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-action-meta {
+  color: var(--text-muted);
+  font-size: 9.5px;
+}
+
+.device-action-revert {
+  padding: 2px 6px;
+  font-size: 9.5px;
+  background: rgba(0, 210, 255, 0.1);
+  color: var(--cyan-primary);
+  border: 1px solid rgba(0, 210, 255, 0.3);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.device-action-revert:hover {
+  background: var(--cyan-primary);
+  color: #060c18;
+}
+
+.device-feed-empty {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+  padding: 16px 8px;
+}

@@ -14,8 +14,16 @@ import { createSecurityRoutes } from './routes/securityRoutes.js';
 import { createTaskRoutes } from './routes/taskRoutes.js';
 import { createMemoryRoutes } from './routes/memoryRoutes.js';
 import { createVoiceRoutes } from './routes/voiceRoutes.js';
+import { createVisionRoutes } from './routes/visionRoutes.js';
+import { createMediaRoutes } from './routes/mediaRoutes.js';
+import { createSchedulerRoutes } from './routes/schedulerRoutes.js';
 import { createSettingsRoutes } from './routes/settingsRoutes.js';
+import { createSubagentRoutes } from './routes/subagentRoutes.js';
+import { createBrowserRoutes } from './routes/browserRoutes.js';
 import { attachWsHandler } from './ws/wsHandler.js';
+import { getSharedVisionProvider } from '../tools/builtins/visionTools.js';
+import { setSchedulerWebSocketBroadcaster } from '../scheduler/channels/HudChannels.js';
+import { getSharedSubagentManager } from '../subagents/SubagentManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,10 +87,36 @@ app.use('/api/security', createSecurityRoutes(agentCore));
 app.use('/api/tasks', createTaskRoutes(agentCore));
 app.use('/api/memory', createMemoryRoutes(agentCore));
 app.use('/api/voice', createVoiceRoutes(voiceASR));
+app.use('/api/vision', createVisionRoutes(getSharedVisionProvider()));
+app.use('/api/media', createMediaRoutes());
+app.use('/api/scheduler', createSchedulerRoutes());
 app.use('/api/settings', createSettingsRoutes());
+app.use('/api/subagents', createSubagentRoutes());
+app.use('/api/browser', createBrowserRoutes());
 
 // ─── WebSocket ───────────────────────────────────────────────────────────────
 attachWsHandler(wss, agentCore);
+
+// Connect scheduler alerts to all open WebSocket connections in real time
+setSchedulerWebSocketBroadcaster((type, payload) => {
+  const data = JSON.stringify({ type, payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      client.send(data);
+    }
+  });
+});
+
+// Connect subagent events to all open WebSocket connections in real time
+const subagentManager = getSharedSubagentManager(() => agentCore);
+subagentManager.on('event', (event) => {
+  const data = JSON.stringify({ type: 'subagent_event', payload: event });
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      client.send(data);
+    }
+  });
+});
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = config.server.port;
