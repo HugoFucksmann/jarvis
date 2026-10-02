@@ -3,6 +3,7 @@ import path from 'path';
 import { LLMProvider, ChatMessage } from '../llm/types.js';
 import { ToolRegistry } from '../tools/ToolRegistry.js';
 import { TaskToolContext } from '../tools/TaskToolContext.js';
+import { ToolPlanner } from './ToolPlanner.js';
 import { MemoryStore } from '../memory/MemoryStore.js';
 import { Logger } from '../logger/Logger.js';
 import {
@@ -21,6 +22,7 @@ export interface AgentLoopOptions {
   memory: MemoryStore;
   workspaceRoot: string;
   mcpRegistry?: MCPRegistry;
+  toolPlanner?: ToolPlanner;
   maxIterations?: number;
   timeoutSeconds?: number;
   thinking?: boolean;
@@ -39,6 +41,7 @@ export class AgentLoop {
   private memory: MemoryStore;
   private workspaceRoot: string;
   private mcpRegistry?: MCPRegistry;
+  private toolPlanner: ToolPlanner;
   private maxIterations: number;
   private timeoutSeconds: number;
   private thinking: boolean;
@@ -58,6 +61,13 @@ export class AgentLoop {
     this.memory = options.memory;
     this.workspaceRoot = options.workspaceRoot;
     this.mcpRegistry = options.mcpRegistry;
+    this.toolPlanner =
+      options.toolPlanner ??
+      new ToolPlanner({
+        tools: this.tools,
+        mcpRegistry: this.mcpRegistry,
+        llm: this.llm,
+      });
     this.maxIterations = options.maxIterations || 15;
     this.timeoutSeconds = options.timeoutSeconds || 180;
     this.thinking = options.thinking ?? false;
@@ -70,50 +80,29 @@ export class AgentLoop {
       try {
         this.onEvent(event);
       } catch (err) {
-        this.logger.error(
-          `Error in event callback: ${String(err)}`
-        );
+        this.logger.error(`Error in event callback: ${String(err)}`);
       }
     }
   }
 
   private getRecentTaskSnippet(): string {
     try {
-      const tasksFile = path.join(
-        this.workspaceRoot,
-        '.jarvis',
-        'tasks.json'
-      );
-
+      const tasksFile = path.join(this.workspaceRoot, '.jarvis', 'tasks.json');
       if (fs.existsSync(tasksFile)) {
-        const raw = fs.readFileSync(
-          tasksFile,
-          'utf-8'
-        );
-
+        const raw = fs.readFileSync(tasksFile, 'utf-8');
         const tasks = JSON.parse(raw);
-
-        if (
-          Array.isArray(tasks) &&
-          tasks.length > 0
-        ) {
-          const last =
-            tasks[tasks.length - 1];
-
+        if (Array.isArray(tasks) && tasks.length > 0) {
+          const last = tasks[tasks.length - 1];
           return `- Última tarea ejecutada: "${last.prompt}" -> Resultado: ${last.summary} (Éxito: ${last.success})`;
         }
       }
     } catch {
-      // Ignore read errors.
+      // Ignorar errores de lectura
     }
-
     return '';
   }
 
-  private shouldPersistTask(
-    prompt: string,
-    executedTools: string[]
-  ): boolean {
+  private shouldPersistTask(prompt: string, executedTools: string[]): boolean {
     const pureActionTools = new Set([
       'control_media',
       'control_volume',
@@ -128,122 +117,73 @@ export class AgentLoop {
 
     if (
       executedTools.length > 0 &&
-      executedTools.every((tool) =>
-        pureActionTools.has(tool)
-      )
+      executedTools.every((tool) => pureActionTools.has(tool))
     ) {
       return false;
     }
 
-    const normalized =
-      prompt.trim().toLowerCase();
-
-    if (
-      /^(ok|gracias|listo|entendido|de nada|chau|adios)$/.test(
-        normalized
-      )
-    ) {
+    const normalized = prompt.trim().toLowerCase();
+    if (/^(ok|gracias|listo|entendido|de nada|chau|adios)$/.test(normalized)) {
       return false;
     }
 
     return true;
   }
 
-  public async run(
-    task: AgentTaskRequest
-  ): Promise<AgentTaskResult> {
+  public async run(task: AgentTaskRequest): Promise<AgentTaskResult> {
     const startTime = Date.now();
-
     let iteration = 0;
     let toolCallsCount = 0;
 
     const executedTools: string[] = [];
     const pastActionsHash: string[] = [];
 
-    this.logger.info(
-      `Starting task ${task.taskId}: "${task.prompt.substring(
-        0,
-        80
-      )}..."`
-    );
+    this.logger.info(`Starting task ${task.taskId}: "${task.prompt.substring(0, 80)}..."`);
 
     this.emit({
       type: 'state_change',
       state: AgentState.UNDERSTANDING,
-      message:
-        'Comprendiendo solicitud y consultando contexto del sistema...',
+      message: 'Comprendiendo solicitud y consultando contexto del sistema...',
     });
 
-    const timeoutController =
-      new AbortController();
-
+    const timeoutController = new AbortController();
     const timeoutTimer = setTimeout(() => {
       timeoutController.abort(
-        new Error(
-          `Agent loop reached timeout of ${this.timeoutSeconds}s`
-        )
+        new Error(`Agent loop reached timeout of ${this.timeoutSeconds}s`)
       );
     }, this.timeoutSeconds * 1000);
 
     const onExternalAbort = () => {
-      timeoutController.abort(
-        new Error('Task cancelled by user')
-      );
+      timeoutController.abort(new Error('Task cancelled by user'));
     };
 
-    task.signal?.addEventListener(
-      'abort',
-      onExternalAbort
-    );
+    task.signal?.addEventListener('abort', onExternalAbort);
 
     try {
-      /*
-       * ------------------------------------------------------------
-       * CONTEXT
-       * ------------------------------------------------------------
-       */
+      // 1. Contexto de sistema y memoria
+      const contextNeeds = ContextBuilder.detectContextNeeds(task.prompt);
+      const relevantFacts = contextNeeds.needsPersistentMemory
+        ? await this.memory.queryLongTermFacts(task.prompt)
+        : [];
 
-      const contextNeeds =
-        ContextBuilder.detectContextNeeds(
-          task.prompt
-        );
+      const systemPrompt = ContextBuilder.buildSystemPrompt({
+        workspaceRoot: this.workspaceRoot,
+        longTermFacts: relevantFacts,
+        modelName: this.llm.getModel(),
+        includePersistentMemory: contextNeeds.needsPersistentMemory,
+      });
 
-      const relevantFacts =
-        contextNeeds.needsPersistentMemory
-          ? await this.memory.queryLongTermFacts(
-            task.prompt
-          )
-          : [];
+      const history = contextNeeds.needsRecentHistory
+        ? await this.memory.getShortTermMessages(task.sessionId, 4)
+        : [];
 
-      const systemPrompt =
-        ContextBuilder.buildSystemPrompt({
-          workspaceRoot:
-            this.workspaceRoot,
-          longTermFacts:
-            relevantFacts,
-          modelName:
-            this.llm.getModel(),
-          includePersistentMemory:
-            contextNeeds.needsPersistentMemory,
-        });
+      const taskContextSnippet = contextNeeds.needsTaskContext
+        ? this.getRecentTaskSnippet()
+        : '';
 
-      const history =
-        contextNeeds.needsRecentHistory
-          ? await this.memory.getShortTermMessages(
-            task.sessionId,
-            4
-          )
-          : [];
-
-      const taskContextSnippet =
-        contextNeeds.needsTaskContext
-          ? this.getRecentTaskSnippet()
-          : '';
-
-      const finalSystemContent =
-        taskContextSnippet
-          ? `${systemPrompt}\n\n## Contexto de Tarea Previa Relevante:\n${taskContextSnippet}`
-          : systemPrompt;
+      const finalSystemContent = taskContextSnippet
+        ? `${systemPrompt}\n\n## Contexto de Tarea Previa Relevante:\n${taskContextSnippet}`
+        : systemPrompt;
 
       const messages: ChatMessage[] = [
         {
@@ -257,73 +197,28 @@ export class AgentLoop {
         },
       ];
 
-      /*
-       * ------------------------------------------------------------
-       * TASK TOOL SCOPE
-       * ------------------------------------------------------------
-       *
-       * IMPORTANT:
-       * No se envían todas las tools globales al modelo.
-       *
-       * TaskToolContext combina:
-       *
-       *   ToolRegistry
-       *      -> tools locales relevantes
-       *
-       *   MCPRegistry
-       *      -> discovery tools relevantes
-       *
-       *   Discovery
-       *      -> tools MCP específicas descubiertas durante la tarea
-       *
-       * Esto mantiene pequeño el contexto enviado a Qwen.
-       */
+      // 2. Planificación de herramientas con ToolPlanner
+      this.emit({
+        type: 'state_change',
+        state: AgentState.PLANNING,
+        message: 'Planificando herramientas necesarias para la tarea...',
+      });
 
-      const taskTools =
-        new TaskToolContext(
-          this.tools,
-          this.mcpRegistry
-        );
-
-      taskTools.addRelevantLocalTools(
-        task.prompt
-      );
-
-      taskTools.addRelevantMCPTools(
-        task.prompt
-      );
-
-      this.logger.info(
-        `Task tool scope initialized with ${taskTools.size} tools: ${taskTools
-          .getToolNames()
-          .join(', ')}`
-      );
+      const taskTools = new TaskToolContext(this.tools, this.mcpRegistry);
+      await this.toolPlanner.planInitialTools(task.prompt, taskTools);
 
       let finalResponse = '';
 
-      /*
-       * ------------------------------------------------------------
-       * AGENT LOOP
-       * ------------------------------------------------------------
-       */
-
-      while (
-        iteration < this.maxIterations
-      ) {
-        if (
-          timeoutController.signal.aborted
-        ) {
+      // 3. Loop principal de ejecución
+      while (iteration < this.maxIterations) {
+        if (timeoutController.signal.aborted) {
           throw new Error(
-            timeoutController.signal.reason?.message ||
-            'Task aborted'
+            timeoutController.signal.reason?.message || 'Task aborted'
           );
         }
 
         iteration++;
-
-        this.logger.debug(
-          `Iteration ${iteration}/${this.maxIterations}`
-        );
+        this.logger.debug(`Iteration ${iteration}/${this.maxIterations}`);
 
         this.emit({
           type: 'state_change',
@@ -334,66 +229,47 @@ export class AgentLoop {
               : 'Evaluando observaciones y razonando siguiente paso...',
         });
 
-        /*
-         * Solo enviamos las tools del scope actual.
-         *
-         * Después de un discovery MCP este scope puede crecer
-         * dinámicamente con las tools descubiertas.
-         */
-
         const toolDefinitions =
-          taskTools.getDefinitions();
+          taskTools.size > 0 ? taskTools.getDefinitions() : undefined;
 
-        this.logger.debug(
-          `Sending ${toolDefinitions.length} tools to LLM: ${taskTools
-            .getToolNames()
-            .join(', ')}`
+        this.logger.info(
+          `Sending ${toolDefinitions ? toolDefinitions.length : 0} tool${toolDefinitions && toolDefinitions.length === 1 ? '' : 's'
+          } to LLM: ${taskTools.getToolNames().join(', ') || 'none'}`
         );
 
         let assistantMessage: ChatMessage;
 
         try {
-          assistantMessage =
-            await this.llm.chat(
-              messages,
-              {
-                tools: toolDefinitions,
-                temperature: 0.1,
-                think: this.thinking,
-                signal:
-                  timeoutController.signal,
+          assistantMessage = await this.llm.chat(
+            messages,
+            {
+              tools: toolDefinitions,
+              temperature: 0.1,
+              think: this.thinking,
+              signal: timeoutController.signal,
+            },
+            {
+              onToken: (token) => {
+                this.emit({
+                  type: 'token',
+                  token,
+                });
               },
-              {
-                onToken: (token) => {
+              onThinking: (thinkingChunk) => {
+                if (
+                  thinkingChunk.includes('tool') ||
+                  thinkingChunk.includes('file') ||
+                  thinkingChunk.includes('command')
+                ) {
                   this.emit({
-                    type: 'token',
-                    token,
+                    type: 'thinking_summary',
+                    summary: 'Planificando invocación de herramientas...',
                   });
-                },
+                }
+              },
+            }
+          );
 
-                onThinking: (
-                  thinkingChunk
-                ) => {
-                  if (
-                    thinkingChunk.includes(
-                      'tool'
-                    ) ||
-                    thinkingChunk.includes(
-                      'file'
-                    ) ||
-                    thinkingChunk.includes(
-                      'command'
-                    )
-                  ) {
-                    this.emit({
-                      type: 'thinking_summary',
-                      summary:
-                        'Planificando invocación de herramientas...',
-                    });
-                  }
-                },
-              }
-            );
           this.logger.info(
             `LLM response iteration ${iteration}: ${JSON.stringify(
               assistantMessage,
@@ -402,129 +278,67 @@ export class AgentLoop {
             )}`
           );
         } catch (err: unknown) {
-          if (
-            timeoutController.signal
-              .aborted
-          ) {
-            throw new Error(
-              'Task was cancelled.'
-            );
+          if (timeoutController.signal.aborted) {
+            throw new Error('Task was cancelled.');
           }
-
           throw err;
         }
 
-        messages.push(
-          assistantMessage
-        );
+        messages.push(assistantMessage);
+        const toolCalls = assistantMessage.tool_calls;
 
-        const toolCalls =
-          assistantMessage.tool_calls;
-
-        /*
-         * No hay tool calls:
-         * el modelo terminó la tarea.
-         */
-
-        if (
-          !toolCalls ||
-          toolCalls.length === 0
-        ) {
+        if (!toolCalls || toolCalls.length === 0) {
           finalResponse =
-            assistantMessage.content ||
-            'Tarea completada con éxito.';
-
+            assistantMessage.content || 'Tarea completada con éxito.';
           break;
         }
 
-        /*
-         * ----------------------------------------------------------
-         * LOOP DETECTION
-         * ----------------------------------------------------------
-         */
+        // Loop detection
+        const actionSignature = JSON.stringify(
+          toolCalls.map((tc) => ({
+            name: tc.function.name,
+            args: tc.function.arguments,
+          }))
+        );
 
-        const actionSignature =
-          JSON.stringify(
-            toolCalls.map((toolCall) => ({
-              name:
-                toolCall.function.name,
-              args:
-                toolCall.function.arguments,
-            }))
-          );
-
-        const recentRepeats =
-          pastActionsHash.filter(
-            (hash) =>
-              hash === actionSignature
-          ).length;
+        const recentRepeats = pastActionsHash.filter(
+          (hash) => hash === actionSignature
+        ).length;
 
         if (recentRepeats >= 2) {
           this.logger.warn(
             `Loop detected! Same tool call sequence repeated 3 times: ${actionSignature}`
           );
-
           messages.push({
             role: 'system',
             content:
               'Advertencia del sistema: Has ejecutado la misma llamada a herramienta repetidamente sin progresar. No vuelvas a llamar la misma herramienta con los mismos argumentos. Concluye la tarea o prueba un enfoque diferente.',
           });
-
-          pastActionsHash.push(
-            actionSignature
-          );
-
+          pastActionsHash.push(actionSignature);
           continue;
         }
 
-        pastActionsHash.push(
-          actionSignature
-        );
+        pastActionsHash.push(actionSignature);
 
-        /*
-         * ----------------------------------------------------------
-         * TOOL EXECUTION
-         * ----------------------------------------------------------
-         */
-
+        // 4. Ejecución de herramientas
         for (const tc of toolCalls) {
-          if (
-            timeoutController.signal
-              .aborted
-          ) {
-            throw new Error(
-              'Task cancelled during tool execution.'
-            );
+          if (timeoutController.signal.aborted) {
+            throw new Error('Task cancelled during tool execution.');
           }
 
           toolCallsCount++;
+          const toolName = tc.function.name;
+          const toolArgs = tc.function.arguments;
 
-          const toolName =
-            tc.function.name;
+          executedTools.push(toolName);
 
-          const toolArgs =
-            tc.function.arguments;
+          // Si el modelo invoca una herramienta que no estaba en el scope inicial
+          if (!taskTools.getTool(toolName)) {
+            this.toolPlanner.resolveTool(toolName, taskTools);
+          }
 
-          executedTools.push(
-            toolName
-          );
-
-          /*
-           * La tool DEBE estar en el scope actual.
-           *
-           * Esto evita que el modelo pueda ejecutar una tool
-           * que no fue proporcionada en esta tarea.
-           */
-
-          const toolObj =
-            taskTools.getTool(
-              toolName
-            );
-
-          const riskLevel =
-            toolObj
-              ? toolObj.riskLevel
-              : RiskLevel.LOW;
+          const toolObj = taskTools.getTool(toolName);
+          const riskLevel = toolObj ? toolObj.riskLevel : RiskLevel.LOW;
 
           this.emit({
             type: 'tool_call_start',
@@ -536,86 +350,64 @@ export class AgentLoop {
 
           this.emit({
             type: 'state_change',
-            state:
-              AgentState.EXECUTING_TOOL,
-            message:
-              `Ejecutando herramienta: ${toolName}...`,
+            state: AgentState.EXECUTING_TOOL,
+            message: `Ejecutando herramienta: ${toolName}...`,
           });
 
           const execContext = {
-            workspaceRoot:
-              this.workspaceRoot,
+            workspaceRoot: this.workspaceRoot,
+            signal: timeoutController.signal,
+            requestApproval: async (
+              tName: string,
+              tArgs: Record<string, unknown>,
+              rLevel: RiskLevel,
+              reason: string
+            ) => {
+              const approvalId = `appr_${Date.now()}_${Math.random()
+                .toString(36)
+                .substring(2, 6)}`;
 
-            signal:
-              timeoutController.signal,
+              this.emit({
+                type: 'state_change',
+                state: AgentState.AWAITING_APPROVAL,
+                message: `Esperando autorización del usuario para: ${tName} (${rLevel})...`,
+              });
 
-            requestApproval:
-              async (
-                tName: string,
-                tArgs: Record<
-                  string,
-                  unknown
-                >,
-                rLevel: RiskLevel,
-                reason: string
-              ) => {
-                const approvalId =
-                  `appr_${Date.now()}_${Math.random()
-                    .toString(36)
-                    .substring(2, 6)}`;
+              this.emit({
+                type: 'approval_requested',
+                toolName: tName,
+                args: tArgs,
+                riskLevel: rLevel,
+                reason,
+                approvalId,
+              });
+
+              if (this.requestApproval) {
+                const approved = await this.requestApproval(
+                  tName,
+                  tArgs,
+                  rLevel,
+                  reason
+                );
 
                 this.emit({
-                  type: 'state_change',
-                  state:
-                    AgentState.AWAITING_APPROVAL,
-                  message:
-                    `Esperando autorización del usuario para: ${tName} (${rLevel})...`,
-                });
-
-                this.emit({
-                  type: 'approval_requested',
-                  toolName: tName,
-                  args: tArgs,
-                  riskLevel: rLevel,
-                  reason,
+                  type: 'approval_resolved',
                   approvalId,
+                  approved,
                 });
 
-                if (
-                  this.requestApproval
-                ) {
-                  const approved =
-                    await this.requestApproval(
-                      tName,
-                      tArgs,
-                      rLevel,
-                      reason
-                    );
+                return approved;
+              }
 
-                  this.emit({
-                    type: 'approval_resolved',
-                    approvalId,
-                    approved,
-                  });
-
-                  return approved;
-                }
-
-                return false;
-              },
+              return false;
+            },
           };
 
-          /*
-           * Ejecutamos contra el scope de la tarea,
-           * no directamente contra todas las tools globales.
-           */
-
-          const result =
-            await taskTools.executeTool(
-              toolName,
-              toolArgs,
-              execContext
-            );
+          const result = await taskTools.executeTool(
+            toolName,
+            toolArgs,
+            execContext
+          );
 
           this.emit({
             type: 'tool_call_result',
@@ -626,122 +418,53 @@ export class AgentLoop {
 
           this.emit({
             type: 'state_change',
-            state:
-              AgentState.OBSERVING,
-            message:
-              `Observando resultado de ${toolName}...`,
+            state: AgentState.OBSERVING,
+            message: `Observando resultado de ${toolName}...`,
           });
 
-          /*
-           * --------------------------------------------------------
-           * MCP DISCOVERY
-           * --------------------------------------------------------
-           *
-           * Ejemplo:
-           *
-           * google__gmail_discover
-           *
-           * El resultado puede contener las tools concretas de
-           * Gmail. Las incorporamos al scope de ESTA tarea.
-           *
-           * No se registran globalmente.
-           */
+          // Re-planificación incremental si la tarea requiere nuevas herramientas encadenadas
+          const replanResult = await this.toolPlanner.replan({
+            prompt: task.prompt,
+            context: taskTools,
+            executedTools,
+            lastToolName: toolName,
+            lastResult: result,
+          });
 
-          if (
-            result.success &&
-            toolName.includes('__') &&
-            toolName
-              .toLowerCase()
-              .includes('discover') &&
-            this.mcpRegistry
-          ) {
-            const separator =
-              toolName.indexOf(
-                '__'
-              );
-
-            if (separator > 0) {
-              const serverName =
-                toolName.substring(
-                  0,
-                  separator
-                );
-
-              const added =
-                taskTools.addDiscoveredMCPTools(
-                  serverName,
-                  result,
-                  task.prompt
-                );
-
-              messages.push({
-                role: 'system',
-                content:
-                  'La tarea original aún no está completada. La herramienta de discovery solo sirvió para encontrar herramientas concretas. Ahora debes utilizar la herramienta disponible que corresponda para completar la solicitud original. No expliques qué herramientas existen ni preguntes nuevamente qué hacer.',
-              });
-
-              this.logger.info(
-                'MCP discovery processed for current task scope.'
-              );
-            }
+          if (replanResult.addedTools.length > 0) {
+            this.logger.info(
+              `ToolPlanner dynamically added tools: ${replanResult.addedTools.join(', ')}`
+            );
           }
-
-          /*
-           * El resultado se incorpora al contexto del LLM.
-           */
 
           messages.push({
             role: 'tool',
             name: toolName,
             tool_call_id: tc.id,
             content:
-              JSON.stringify(result),
+              typeof result.data === 'string'
+                ? result.data
+                : JSON.stringify(result),
           });
         }
       }
 
-      /*
-       * ------------------------------------------------------------
-       * MAX ITERATIONS
-       * ------------------------------------------------------------
-       */
-
-      if (
-        iteration >=
-        this.maxIterations &&
-        !finalResponse
-      ) {
+      if (iteration >= this.maxIterations && !finalResponse) {
         finalResponse =
           'Se alcanzó el límite máximo de iteraciones configuradas para la tarea sin llegar a una conclusión definitiva.';
       }
 
-      /*
-       * ------------------------------------------------------------
-       * MEMORY
-       * ------------------------------------------------------------
-       */
+      // 5. Persistencia en memoria
+      if (this.shouldPersistTask(task.prompt, executedTools)) {
+        await this.memory.saveShortTermMessage(task.sessionId, {
+          role: 'user',
+          content: task.prompt,
+        });
 
-      if (
-        this.shouldPersistTask(
-          task.prompt,
-          executedTools
-        )
-      ) {
-        await this.memory.saveShortTermMessage(
-          task.sessionId,
-          {
-            role: 'user',
-            content: task.prompt,
-          }
-        );
-
-        await this.memory.saveShortTermMessage(
-          task.sessionId,
-          {
-            role: 'assistant',
-            content: finalResponse,
-          }
-        );
+        await this.memory.saveShortTermMessage(task.sessionId, {
+          role: 'assistant',
+          content: finalResponse,
+        });
       } else {
         this.logger.debug(
           `Task ${task.taskId} was a standalone action (${executedTools.join(
@@ -750,12 +473,7 @@ export class AgentLoop {
         );
       }
 
-      /*
-       * ------------------------------------------------------------
-       * COMPLETED
-       * ------------------------------------------------------------
-       */
-
+      // 6. Conclusión
       this.emit({
         type: 'state_change',
         state: AgentState.COMPLETED,
@@ -767,9 +485,7 @@ export class AgentLoop {
         response: finalResponse,
       });
 
-      const durationMs =
-        Date.now() - startTime;
-
+      const durationMs = Date.now() - startTime;
       this.logger.info(
         `Task completed in ${durationMs}ms with ${toolCallsCount} tool calls across ${iteration} iterations.`
       );
@@ -783,26 +499,15 @@ export class AgentLoop {
         durationMs,
       };
     } catch (err: unknown) {
-      const errMsg =
-        err instanceof Error
-          ? err.message
-          : String(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Task failed: ${errMsg}`);
 
-      this.logger.error(
-        `Task failed: ${errMsg}`
-      );
-
-      if (
-        errMsg.includes('cancelled') ||
-        errMsg.includes('aborted')
-      ) {
+      if (errMsg.includes('cancelled') || errMsg.includes('aborted')) {
         this.emit({
           type: 'state_change',
           state: AgentState.CANCELLED,
-          message:
-            'Tarea cancelada por el usuario.',
+          message: 'Tarea cancelada por el usuario.',
         });
-
         this.emit({
           type: 'task_cancelled',
         });
@@ -810,10 +515,8 @@ export class AgentLoop {
         this.emit({
           type: 'state_change',
           state: AgentState.ERROR,
-          message:
-            `Error durante la ejecución: ${errMsg}`,
+          message: `Error durante la ejecución: ${errMsg}`,
         });
-
         this.emit({
           type: 'task_error',
           error: errMsg,
@@ -826,17 +529,12 @@ export class AgentLoop {
         response: '',
         toolCallsCount,
         iterations: iteration,
-        durationMs:
-          Date.now() - startTime,
+        durationMs: Date.now() - startTime,
         error: errMsg,
       };
     } finally {
       clearTimeout(timeoutTimer);
-
-      task.signal?.removeEventListener(
-        'abort',
-        onExternalAbort
-      );
+      task.signal?.removeEventListener('abort', onExternalAbort);
     }
   }
 }

@@ -11,21 +11,13 @@ export class MCPRegistry {
   private clients = new Map<string, MCPClient>();
   private adapters = new Map<string, MCPToolAdapter[]>();
 
-  /**
-   * Connects to all configured MCP servers.
-   *
-   * The second argument is intentionally kept for backwards compatibility.
-   * MCP tools are NOT registered globally anymore.
-   */
   public async init(
     configs: MCPServerConfig[],
     _registry?: ToolRegistry
   ): Promise<void> {
     for (const cfg of configs) {
       try {
-        const { client, tools } =
-          await buildMCPAdapters(cfg);
-
+        const { client, tools } = await buildMCPAdapters(cfg);
         this.clients.set(cfg.name, client);
         this.adapters.set(cfg.name, tools);
 
@@ -33,27 +25,17 @@ export class MCPRegistry {
           `MCP server "${cfg.name}" connected with ${tools.length} tools.`
         );
       } catch (err: unknown) {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : String(err);
-
-        logger.error(
-          `Failed to initialize MCP server "${cfg.name}": ${msg}`
-        );
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`Failed to initialize MCP server "${cfg.name}": ${msg}`);
       }
     }
   }
 
-  public getClient(
-    serverName: string
-  ): MCPClient | undefined {
+  public getClient(serverName: string): MCPClient | undefined {
     return this.clients.get(serverName);
   }
 
-  public getTools(
-    serverName: string
-  ): MCPToolAdapter[] {
+  public getTools(serverName: string): MCPToolAdapter[] {
     return this.adapters.get(serverName) ?? [];
   }
 
@@ -61,9 +43,7 @@ export class MCPRegistry {
     serverName: string,
     toolName: string
   ): MCPToolAdapter | undefined {
-    return this.getTools(serverName).find(
-      (tool) => tool.name === toolName
-    );
+    return this.getTools(serverName).find((tool) => tool.name === toolName);
   }
 
   public getServerNames(): string[] {

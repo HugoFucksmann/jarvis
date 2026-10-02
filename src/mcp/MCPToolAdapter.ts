@@ -5,11 +5,6 @@ import { Logger } from '../logger/Logger.js';
 
 const logger = new Logger('MCPToolAdapter');
 
-/**
- * Wraps a single MCP tool as an ITool compatible with JARVIS ToolRegistry.
- * Tools are named "serverName__toolName" so they are unique across servers
- * and callable by the LLM exactly like any built-in tool.
- */
 export class MCPToolAdapter implements ITool {
   readonly name: string;
   readonly description: string;
@@ -31,6 +26,14 @@ export class MCPToolAdapter implements ITool {
     };
   }
 
+  public getRawName(): string {
+    return this.rawName;
+  }
+
+  public getServerName(): string {
+    return this.client.serverName;
+  }
+
   public async execute(
     args: Record<string, unknown>,
     _context: ToolExecutionContext
@@ -38,18 +41,16 @@ export class MCPToolAdapter implements ITool {
     try {
       const result = await this.client.callTool(this.rawName, args);
 
-      logger.info(
-        'MCP discovery raw result for "' +
-        this.name +
-        '": ' +
-        JSON.stringify(result, null, 2)
-      );
+      const mcpResult = result as {
+        content?: Array<{ type: string; text?: string }>;
+        isError?: boolean;
+      };
 
-      const mcpResult = result as { content?: Array<{ type: string; text?: string }>; isError?: boolean };
-      const text = mcpResult.content
-        ?.filter((c) => c.type === 'text')
-        .map((c) => c.text ?? '')
-        .join('\n') ?? JSON.stringify(result);
+      const text =
+        mcpResult.content
+          ?.filter((c) => c.type === 'text')
+          .map((c) => c.text ?? '')
+          .join('\n') ?? JSON.stringify(result);
 
       if (mcpResult.isError) {
         logger.warn('MCP tool "' + this.name + '" returned an error: ' + text);
@@ -76,11 +77,9 @@ export class MCPToolAdapter implements ITool {
   }
 }
 
-/**
- * Connects to one MCPServerConfig, discovers its tools, and returns them
- * as MCPToolAdapter instances ready to register in ToolRegistry.
- */
-export async function buildMCPAdapters(config: MCPServerConfig): Promise<{ client: MCPClient; tools: MCPToolAdapter[] }> {
+export async function buildMCPAdapters(
+  config: MCPServerConfig
+): Promise<{ client: MCPClient; tools: MCPToolAdapter[] }> {
   const client = new MCPClient(config);
   await client.connect();
   const mcpTools = await client.listTools();
@@ -88,4 +87,3 @@ export async function buildMCPAdapters(config: MCPServerConfig): Promise<{ clien
   const tools = mcpTools.map((t) => new MCPToolAdapter(client, t));
   return { client, tools };
 }
-
