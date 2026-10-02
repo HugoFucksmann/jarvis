@@ -45,6 +45,19 @@ textarea {
   user-select: text;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* Foco de teclado visible en todos los controles */
 button:focus-visible,
 .tool-tile:focus-visible,
@@ -297,7 +310,7 @@ button:focus-visible,
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 18px 16px;
+  padding: 12px 16px 12px;
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -321,14 +334,25 @@ button:focus-visible,
 .stream-panel {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.stream-head {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-height: 24px;
 }
 
 .stream-prompt-tag {
+  flex: 1;
+  min-width: 0;
   font-size: 0.78rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stream-content {
@@ -339,9 +363,22 @@ button:focus-visible,
   overflow-wrap: anywhere;
 }
 
+/* Sin texto aún: no reserva ningún espacio bajo la directiva */
+.stream-content:empty {
+  display: none;
+}
+
 /* El reset global elimina el espaciado nativo: se restituye para el markdown */
 .stream-content>*+* {
   margin-top: 0.7em;
+}
+
+.stream-content> :first-child {
+  margin-top: 0;
+}
+
+.stream-content> :last-child {
+  margin-bottom: 0;
 }
 
 .stream-content ul,
@@ -432,102 +469,292 @@ button:focus-visible,
   overflow-x: auto;
 }
 
+/* Acciones: iconos en la fila de la directiva, sin fila propia */
 .stream-actions {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding-top: 8px;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.stream-panel:hover .stream-actions,
+.stream-panel:focus-within .stream-actions {
+  opacity: 1;
 }
 
 .stream-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  border-radius: 5px;
   cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.stream-action-btn:hover {
+.stream-action-btn:hover:not(:disabled) {
   color: var(--text-main);
   background: var(--bg-hover);
 }
 
+.stream-action-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stream-action-btn .icon-check {
+  display: none;
+}
+
+.stream-action-btn.is-copied {
+  color: var(--accent-green);
+}
+
+.stream-action-btn.is-copied .icon-copy {
+  display: none;
+}
+
+.stream-action-btn.is-copied .icon-check {
+  display: block;
+}
+
 /* ==========================================================================
-   Menú de módulos
+   Menú de módulos: búsqueda + lista compacta + interruptores
    ========================================================================== */
 .tools-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 4px;
-}
-
-.tools-section-title {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-/* Columnas fluidas: 2 en ventana normal, 1 en ventanas estrechas */
-.tools-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
 }
 
-.tool-tile {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-main);
-  font-family: inherit;
-  padding: 10px 12px;
+.tools-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tools-search {
+  flex: 1;
   min-width: 0;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
+  height: 38px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: text;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.tools-search:focus-within {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: var(--accent-blue);
+}
+
+.tools-search svg {
+  flex-shrink: 0;
+}
+
+.tools-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.tools-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tools-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tools-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+.tools-list .tool-tile {
+  flex-shrink: 0;
+}
+
+.tool-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-main);
+  font-family: inherit;
   text-align: left;
+  cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .tool-tile:hover {
   background: var(--bg-hover);
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
-.tool-tile.active {
-  background: rgba(56, 189, 248, 0.08);
-  border-color: rgba(56, 189, 248, 0.4);
+.tool-tile:focus-visible {
+  outline-offset: -2px;
 }
 
 .tool-tile-icon {
-  font-size: 1.15rem;
-  width: 1.5em;
-  text-align: center;
   flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--text-dim);
+  transition: color 0.15s ease;
+}
+
+.tool-tile:hover .tool-tile-icon {
+  color: var(--text-main);
 }
 
 .tool-tile-text {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
 }
 
 .tool-tile-title {
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   font-weight: 500;
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .tool-tile-desc {
-  font-size: 0.74rem;
+  min-width: 0;
+  font-size: 0.76rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-tile-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0.45;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.tool-tile:hover .tool-tile-chevron,
+.tool-tile:focus-visible .tool-tile-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Filas: una línea, título + descripción */
+.tools-list .tool-tile {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+}
+
+.tools-list .tool-tile-text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tools-empty {
+  padding: 18px 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* "Ver todos": despliega el resto; la lista crece hasta ~5 filas y luego hace scroll interno */
+.tools-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tools-more:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.tools-more svg {
+  transition: transform 0.2s ease;
+}
+
+.tools-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+/* Interruptores de icono (voz, Hey JARVIS) */
+.icon-toggle {
+  position: relative;
+  flex-shrink: 0;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+
+.icon-toggle .tool-tile-icon,
+.icon-toggle:hover .tool-tile-icon {
+  color: inherit;
+}
+
+.icon-toggle.active {
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+/* Apagado: icono atenuado y tachado */
+.icon-toggle:not(.active)::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: rotate(-45deg);
+  pointer-events: none;
 }
 
 .badge {
@@ -565,33 +792,38 @@ button:focus-visible,
   flex-shrink: 0;
 }
 
-.drawer-header-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+.drawer-header .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+
+/* El botón de volver queda alineado al borde de contenido */
+.drawer-header .drawer-close-btn {
+  margin-left: -6px;
 }
 
 .drawer-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.drawer-header-info .drawer-title {
-  flex: 0 1 auto;
-}
-
 .drawer-badge {
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drawer-actions {
@@ -746,8 +978,13 @@ button:focus-visible,
   transition: opacity 0.15s ease;
 }
 
-.flat-btn:hover {
+.flat-btn:hover:not(:disabled) {
   opacity: 0.88;
+}
+
+.flat-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ==========================================================================
@@ -782,12 +1019,37 @@ button:focus-visible,
 }
 
 .security-checkbox {
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  accent-color: var(--accent-blue);
-  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
   flex-shrink: 0;
+  width: 30px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.security-checkbox::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.security-checkbox:checked {
+  background: var(--accent-blue);
+}
+
+.security-checkbox:checked::before {
+  transform: translateX(12px);
 }
 
 .security-toggle-content {

@@ -22,6 +22,7 @@ import { initWS, sendPrompt, abortTask, clearResponse } from './modules/ws.js';
 import { setupWakeWord } from './modules/wakeword.js';
 import { bindSchedulerEvents } from './modules/scheduler.js';
 import { initSubagentsDrawer } from './modules/subagents.js';
+import { initToolsMenu } from './modules/tools-menu.js';
 
 const sessionId = 'native_' + Date.now();
 
@@ -110,17 +111,20 @@ dom.abortBtn?.addEventListener('click', abortTask);
 dom.clearBtn?.addEventListener('click', clearResponse);
 
 if (dom.copyBtn) {
-  const copyLabel = dom.copyBtn.textContent;
+  const COPY_LABEL = 'Copiar respuesta';
   let copyTimer = null;
 
   dom.copyBtn.addEventListener('click', async () => {
     if (!state.rawResponse) return;
     try {
       await navigator.clipboard.writeText(state.rawResponse);
-      dom.copyBtn.textContent = '¡Copiado!';
+      // Feedback sin texto: el icono pasa a ✓ y vuelve solo
+      dom.copyBtn.classList.add('is-copied');
+      dom.copyBtn.title = dom.copyBtn.ariaLabel = 'Copiado';
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => {
-        dom.copyBtn.textContent = copyLabel;
+        dom.copyBtn.classList.remove('is-copied');
+        dom.copyBtn.title = dom.copyBtn.ariaLabel = COPY_LABEL;
       }, 1500);
     } catch (err) {
       console.error('Clipboard error:', err);
@@ -164,6 +168,7 @@ function setupWindowSizing() {
 }
 
 // ── Inicialización de módulos ────────────────────────────────────────────────
+initToolsMenu();
 bindTTSControls();
 bindVoiceEvents(runPrompt);
 bindHistoryEvents(runPrompt);

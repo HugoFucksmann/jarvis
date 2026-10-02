@@ -65,6 +65,9 @@ export function setMode(mode) {
     dom.footerHint.innerHTML = state.pendingApprovalId ? HINTS.approval : (HINTS[mode] || HINTS.idle);
   }
 
+  // Permite que otros módulos (p. ej. el menú de módulos) reaccionen sin acoplarse a ui.js
+  document.dispatchEvent(new CustomEvent('jarvis:modechange', { detail: { mode } }));
+
   if (mode === 'idle' || mode === 'responding') {
     setTimeout(() => {
       // Evita robar el foco si el modo cambió durante el retardo

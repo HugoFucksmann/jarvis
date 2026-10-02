@@ -95,86 +95,181 @@
     <!-- ── ÁREA DE CONTENIDO (se adapta a la altura del contenido) ── -->
     <main class="content-area" id="content-area">
 
-      <!-- Menú de módulos -->
+      <!-- Menú de módulos: buscador + interruptores de voz en una sola fila; principales a mano;
+           "Ver todos" despliega el resto (la lista tiene altura máxima y scroll interno).
+           Fijar/desfijar un módulo = data-pinned (y el atributo hidden). -->
       <div class="tools-view" id="tools-tray" style="display: none;">
-        <div class="tools-section-title">Módulos del sistema</div>
-        <div class="tools-grid">
-          <button id="btn-toggle-history" class="tool-tile">
-            <span class="tool-tile-icon" aria-hidden="true">📋</span>
+        <div class="tools-bar">
+          <label class="tools-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input type="text" id="tools-search" class="tools-search-input" placeholder="Buscar módulo…"
+              aria-label="Buscar módulo" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <!-- Voz de JARVIS (velocidad fija 1.8x): activar / desactivar -->
+          <button id="native-tts-btn" class="tool-tile icon-toggle active" data-toggle aria-pressed="true"
+            title="Voz de JARVIS (1.8x)" aria-label="Voz de JARVIS">
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 5L6 9H3v6h3l5 4z" />
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+            </svg>
+            <!-- Nodos que actualiza tts.js; no se muestran pero siguen disponibles -->
+            <span class="sr-only"><span id="voice-indicator">🔊</span> Velocidad <strong
+                id="voice-speed-badge">1.8x</strong></span>
+          </button>
+
+          <!-- Detección "Hey JARVIS": activar / desactivar -->
+          <button id="native-wakeword-btn" class="tool-tile icon-toggle active" data-toggle aria-pressed="true"
+            title="Hey JARVIS (detección por voz)" aria-label="Detección Hey JARVIS">
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 12h2M8 8v8M12 4v16M16 8v8M20 11v2" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="tools-list" id="tools-list">
+          <button id="btn-toggle-history" class="tool-tile" data-module data-pinned="true"
+            data-keywords="historial tareas consultas previas">
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <path d="M3 4v5h5" />
+              <path d="M12 7v5l3 2" />
+            </svg>
             <span class="tool-tile-text">
               <span class="tool-tile-title">Historial</span>
               <span class="tool-tile-desc">Tareas y consultas previas</span>
             </span>
+            <svg class="tool-tile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
-
-          <button id="btn-toggle-scheduler" class="tool-tile">
-            <span class="tool-tile-icon" aria-hidden="true">⏰</span>
+          <button id="btn-toggle-scheduler" class="tool-tile" data-module data-pinned="true"
+            data-keywords="agenda recordatorios calendario">
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="17" rx="2" />
+              <path d="M3 9h18M8 2v4M16 2v4" />
+            </svg>
             <span class="tool-tile-text">
               <span class="tool-tile-title">Agenda</span>
               <span class="tool-tile-desc">Recordatorios activos</span>
             </span>
+            <svg class="tool-tile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
-
-          <button id="btn-toggle-subagents" class="tool-tile">
-            <span class="tool-tile-icon" aria-hidden="true">⚡</span>
+          <button id="btn-toggle-subagents" class="tool-tile" data-module data-pinned="true"
+            data-keywords="subagentes procesos segundo plano agentes">
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="6" cy="6" r="2.5" />
+              <circle cx="18" cy="6" r="2.5" />
+              <circle cx="12" cy="18" r="2.5" />
+              <path d="M6 8.5V10a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V8.5M12 13v2.5" />
+            </svg>
             <span class="tool-tile-text">
               <span class="tool-tile-title">Subagentes <span class="badge" id="subagents-count-badge"
                   style="display:none;">0</span></span>
               <span class="tool-tile-desc">Procesos en segundo plano</span>
             </span>
+            <svg class="tool-tile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
-
-          <button id="btn-toggle-memory" class="tool-tile">
-            <span class="tool-tile-icon" aria-hidden="true">🧠</span>
+          <button id="btn-toggle-memory" class="tool-tile" data-module data-pinned="false"
+            data-keywords="memoria recuerdos memory md" hidden>
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <ellipse cx="12" cy="5.5" rx="8" ry="3" />
+              <path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+            </svg>
             <span class="tool-tile-text">
               <span class="tool-tile-title">Memoria</span>
               <span class="tool-tile-desc">Editar .jarvis/MEMORY.md</span>
             </span>
+            <svg class="tool-tile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
-
-          <button id="btn-toggle-security" class="tool-tile">
-            <span class="tool-tile-icon" aria-hidden="true">🛡️</span>
+          <button id="btn-toggle-security" class="tool-tile" data-module data-pinned="false"
+            data-keywords="permisos seguridad reglas comandos" hidden>
+            <svg class="tool-tile-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z" />
+            </svg>
             <span class="tool-tile-text">
               <span class="tool-tile-title">Permisos</span>
               <span class="tool-tile-desc">Reglas y comandos seguros</span>
             </span>
-          </button>
-
-          <button id="native-tts-btn" class="tool-tile">
-            <span class="tool-tile-icon" id="voice-indicator" aria-hidden="true">🔊</span>
-            <span class="tool-tile-text">
-              <span class="tool-tile-title">Voz JARVIS</span>
-              <span class="tool-tile-desc">Velocidad: <strong id="voice-speed-badge">1.35x</strong></span>
-            </span>
-          </button>
-
-          <button id="native-wakeword-btn" class="tool-tile active">
-            <span class="tool-tile-icon" aria-hidden="true">🎙️</span>
-            <span class="tool-tile-text">
-              <span class="tool-tile-title">Hey JARVIS</span>
-              <span class="tool-tile-desc">Detección de voz activa</span>
-            </span>
+            <svg class="tool-tile-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </button>
         </div>
+
+        <button type="button" id="tools-more" class="tools-more" aria-expanded="false" hidden>
+          <span id="tools-more-label">Ver todos</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <p class="tools-empty" id="tools-empty" role="status" hidden></p>
       </div>
 
-      <!-- Respuesta -->
+      <!-- Respuesta: la cabecera comparte fila con la directiva (las acciones no ocupan fila propia) -->
       <div class="stream-panel" id="response-panel" style="display: none;">
-        <div class="stream-prompt-tag" id="stream-prompt"></div>
-        <div class="stream-content" id="response-body" aria-busy="false"></div>
-        <div class="stream-actions">
-          <button id="btn-copy-response" class="stream-action-btn">Copiar</button>
-          <button id="btn-clear-response" class="stream-action-btn">Limpiar</button>
+        <div class="stream-head">
+          <div class="stream-prompt-tag" id="stream-prompt"></div>
+          <div class="stream-actions">
+            <button id="btn-copy-response" class="stream-action-btn" title="Copiar respuesta"
+              aria-label="Copiar respuesta" disabled>
+              <svg class="icon-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+              </svg>
+              <svg class="icon-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12.5l4.5 4.5L19 7.5" />
+              </svg>
+            </button>
+            <button id="btn-clear-response" class="stream-action-btn" title="Limpiar (Esc)"
+              aria-label="Limpiar respuesta">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+              </svg>
+            </button>
+          </div>
         </div>
+        <div class="stream-content" id="response-body" aria-busy="false"></div>
       </div>
 
       <!-- Drawer: Historial -->
       <section class="drawer-panel" id="history-drawer" aria-label="Historial de tareas" style="display: none;">
         <div class="drawer-header">
-          <span class="drawer-title">Historial de tareas</span>
+          <button id="btn-close-history" class="icon-btn drawer-close-btn" title="Volver a módulos"
+            aria-label="Volver a módulos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <span class="drawer-title">Historial</span>
           <span class="drawer-badge" id="history-count">0</span>
-          <button id="btn-close-history" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
-            aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
         </div>
         <div class="flat-list" id="history-list">
           <div class="flat-empty">Sin historial registrado.</div>
@@ -184,11 +279,17 @@
       <!-- Drawer: Memoria -->
       <section class="drawer-panel" id="memory-drawer" aria-label="Memoria persistente" style="display: none;">
         <div class="drawer-header">
-          <span class="drawer-title">Memoria persistente (.jarvis/MEMORY.md)</span>
+          <button id="btn-close-memory" class="icon-btn drawer-close-btn" title="Volver a módulos"
+            aria-label="Volver a módulos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <span class="drawer-title">Memoria</span>
+          <span class="drawer-badge">.jarvis/MEMORY.md</span>
           <div class="drawer-actions">
             <button id="btn-save-memory" class="flat-btn primary">Guardar</button>
-            <button id="btn-close-memory" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
-              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
         <textarea id="memory-editor" class="flat-textarea" spellcheck="false" aria-label="Contenido de MEMORY.md"
@@ -198,14 +299,17 @@
       <!-- Drawer: Seguridad -->
       <section class="drawer-panel" id="security-drawer" aria-label="Permisos y seguridad" style="display: none;">
         <div class="drawer-header">
-          <div class="drawer-header-info">
-            <span class="drawer-title">Permisos y seguridad</span>
-            <span class="drawer-badge">.jarvis/permissions.json</span>
-          </div>
+          <button id="btn-close-security" class="icon-btn drawer-close-btn" title="Volver a módulos"
+            aria-label="Volver a módulos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <span class="drawer-title">Permisos</span>
+          <span class="drawer-badge">.jarvis/permissions.json</span>
           <div class="drawer-actions">
             <button id="btn-save-security" class="flat-btn primary">Guardar</button>
-            <button id="btn-close-security" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
-              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
           </div>
         </div>
 
@@ -233,13 +337,22 @@
       <!-- Drawer: Agenda -->
       <section class="drawer-panel" id="scheduler-drawer" aria-label="Agenda y recordatorios" style="display: none;">
         <div class="drawer-header">
-          <span class="drawer-title">Agenda y recordatorios</span>
+          <button id="btn-close-scheduler" class="icon-btn drawer-close-btn" title="Volver a módulos"
+            aria-label="Volver a módulos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <span class="drawer-title">Agenda</span>
           <span class="drawer-badge" id="reminders-count">0</span>
           <div class="drawer-actions">
-            <button id="btn-refresh-scheduler" class="icon-btn" title="Actualizar" aria-label="Actualizar"><span
-                aria-hidden="true">↻</span></button>
-            <button id="btn-close-scheduler" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
-              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
+            <button id="btn-refresh-scheduler" class="icon-btn" title="Actualizar" aria-label="Actualizar agenda">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+              </svg>
+            </button>
           </div>
         </div>
         <div class="flat-list" id="reminders-list">
@@ -251,13 +364,22 @@
       <section class="drawer-panel" id="subagents-drawer" aria-label="Subagentes en segundo plano"
         style="display: none;">
         <div class="drawer-header">
-          <span class="drawer-title">Subagentes en segundo plano</span>
+          <button id="btn-close-subagents" class="icon-btn drawer-close-btn" title="Volver a módulos"
+            aria-label="Volver a módulos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <span class="drawer-title">Subagentes</span>
           <span class="drawer-badge" id="subagents-count">0</span>
           <div class="drawer-actions">
-            <button id="btn-refresh-subagents" class="icon-btn" title="Actualizar" aria-label="Actualizar"><span
-                aria-hidden="true">↻</span></button>
-            <button id="btn-close-subagents" class="icon-btn drawer-close-btn" title="Volver al menú de módulos"
-              aria-label="Volver al menú de módulos"><span aria-hidden="true">✕</span></button>
+            <button id="btn-refresh-subagents" class="icon-btn" title="Actualizar" aria-label="Actualizar subagentes">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+              </svg>
+            </button>
           </div>
         </div>
         <div class="flat-list" id="subagents-list">

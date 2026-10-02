@@ -22,6 +22,7 @@ function renderResponse() {
   // Solo seguimos el final si el usuario ya estaba abajo (no pelear con su scroll)
   const stick = !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
   dom.body.innerHTML = formatMarkdown(state.rawResponse);
+  if (dom.copyBtn) dom.copyBtn.disabled = !state.rawResponse.trim();
   if (stick && scroller) scroller.scrollTop = scroller.scrollHeight;
 }
 
@@ -235,6 +236,7 @@ export function sendPrompt(sessionId) {
   state.rawResponse = '';
   state.taskStart = Date.now();
   if (dom.body) dom.body.innerHTML = '';
+  if (dom.copyBtn) dom.copyBtn.disabled = true;
   if (dom.content) dom.content.scrollTop = 0;
   if (dom.abortBtn) dom.abortBtn.disabled = false;
   if (dom.promptEcho) dom.promptEcho.textContent = `Directiva: ${text}`;
@@ -256,6 +258,7 @@ export function clearResponse() {
   renderQueued = false;
   state.rawResponse = '';
   if (dom.body) dom.body.innerHTML = '';
+  if (dom.copyBtn) dom.copyBtn.disabled = true;
   if (dom.promptEcho) dom.promptEcho.textContent = '';
   if (!state.isExecuting) setActivity(false);
   setMode('idle');
