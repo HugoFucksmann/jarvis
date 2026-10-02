@@ -4,13 +4,19 @@ import { ToolRegistry } from '../tools/ToolRegistry.js';
 import { PermissionManager } from '../tools/security/PermissionManager.js';
 import { MemoryStore } from '../memory/MemoryStore.js';
 import { AgentLoop } from './AgentLoop.js';
-import { AgentEvent, AgentTaskRequest, AgentTaskResult } from './types.js';
+import {
+  AgentEvent,
+  AgentTaskRequest,
+  AgentTaskResult,
+} from './types.js';
 import { config, updateModelConfig } from '../config/index.js';
 import { Logger } from '../logger/Logger.js';
 import { RiskLevel } from '../tools/types.js';
 import { TaskHistory } from './TaskHistory.js';
 
 import { getBuiltinTools } from '../tools/builtins/index.js';
+import { MCPRegistry } from '../mcp/MCPRegistry.js';
+import { getMCPServerConfigs } from '../mcp/mcpConfig.js';
 
 export class AgentCore {
   private llm: LLMProvider;
@@ -19,32 +25,84 @@ export class AgentCore {
   private permissionManager: PermissionManager;
   private taskHistory: TaskHistory;
   private activeTasks: Map<string, AbortController> = new Map();
+
+  private mcpRegistry = new MCPRegistry();
+
   private logger = new Logger('AgentCore');
 
   constructor() {
-    this.logger.info('Initializing JARVIS Agent Core...');
+    this.logger.info(
+      'Initializing JARVIS Agent Core...'
+    );
 
-    // 1. Initialize LLM Provider (Ollama local)
-    this.llm = new OllamaProvider(config.ollama.baseUrl, config.ollama.model);
+    // 1. Initialize LLM Provider
+    this.llm = new OllamaProvider(
+      config.ollama.baseUrl,
+      config.ollama.model
+    );
 
     // 2. Initialize Permission Manager
-    this.permissionManager = new PermissionManager(config.security, config.workspaceRoot);
+    this.permissionManager =
+      new PermissionManager(
+        config.security,
+        config.workspaceRoot
+      );
 
     // 3. Initialize Tool Registry
-    this.tools = new ToolRegistry(this.permissionManager);
+    this.tools = new ToolRegistry(
+      this.permissionManager
+    );
 
     // 4. Initialize Memory Store & Task History
-    this.memory = new MemoryStore(config.workspaceRoot);
-    this.taskHistory = new TaskHistory(config.workspaceRoot);
+    this.memory = new MemoryStore(
+      config.workspaceRoot
+    );
+
+    this.taskHistory = new TaskHistory(
+      config.workspaceRoot
+    );
 
     // 5. Register all built-in tools
     this.registerBuiltinTools();
 
-    this.logger.info(`Agent Core initialized with model: ${this.llm.getModel()} at ${config.workspaceRoot}`);
+    this.logger.info(
+      `Agent Core initialized with model: ${this.llm.getModel()} at ${config.workspaceRoot}`
+    );
+  }
+
+  /**
+   * Initializes MCP servers.
+   *
+   * MCP tools are kept inside MCPRegistry and are NOT
+   * registered globally in ToolRegistry.
+   */
+  public async initMCP(): Promise<void> {
+    const configs =
+      getMCPServerConfigs();
+
+    if (configs.length === 0) {
+      this.logger.info(
+        'No MCP servers configured — skipping MCP initialization.'
+      );
+      return;
+    }
+
+    await this.mcpRegistry.init(
+      configs,
+      this.tools
+    );
+
+    this.logger.info(
+      `MCP initialization completed. Connected servers: ${this.mcpRegistry
+        .getServerNames()
+        .join(', ') || 'none'}`
+    );
   }
 
   private registerBuiltinTools(): void {
-    const builtinTools = getBuiltinTools();
+    const builtinTools =
+      getBuiltinTools();
+
     for (const tool of builtinTools) {
       this.tools.registerTool(tool);
     }
@@ -70,19 +128,34 @@ export class AgentCore {
     return this.permissionManager;
   }
 
-  public async setModel(modelName: string): Promise<void> {
+  public getMCPRegistry(): MCPRegistry {
+    return this.mcpRegistry;
+  }
+
+  public async setModel(
+    modelName: string
+  ): Promise<void> {
     this.llm.setModel(modelName);
     updateModelConfig(modelName);
   }
 
-  public cancelTask(taskId: string): boolean {
-    const controller = this.activeTasks.get(taskId);
+  public cancelTask(
+    taskId: string
+  ): boolean {
+    const controller =
+      this.activeTasks.get(taskId);
+
     if (controller) {
-      this.logger.info(`Cancelling task ${taskId}`);
+      this.logger.info(
+        `Cancelling task ${taskId}`
+      );
+
       controller.abort();
       this.activeTasks.delete(taskId);
+
       return true;
     }
+
     return false;
   }
 
@@ -90,57 +163,123 @@ export class AgentCore {
     prompt: string,
     sessionId: string = 'default',
     callbacks?: {
-      onEvent?: (event: AgentEvent) => void;
-      requestApproval?: (toolName: string, args: Record<string, unknown>, risk: RiskLevel, reason: string) => Promise<boolean>;
+      onEvent?: (
+        event: AgentEvent
+      ) => void;
+
+      requestApproval?: (
+        toolName: string,
+        args: Record<string, unknown>,
+        risk: RiskLevel,
+        reason: string
+      ) => Promise<boolean>;
     }
   ): Promise<AgentTaskResult> {
-    const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const abortController = new AbortController();
-    this.activeTasks.set(taskId, abortController);
+    const taskId =
+      `task_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 6)}`;
+
+    const abortController =
+      new AbortController();
+
+    this.activeTasks.set(
+      taskId,
+      abortController
+    );
+
     const toolsUsed: string[] = [];
 
-    const agentLoop = new AgentLoop({
-      llm: this.llm,
-      tools: this.tools,
-      memory: this.memory,
-      workspaceRoot: config.workspaceRoot,
-      maxIterations: config.agent.maxIterations,
-      timeoutSeconds: config.agent.timeoutSeconds,
-      thinking: config.ollama.thinking,
-      onEvent: (event) => {
-        if (event.type === 'tool_call_start') {
-          if (!toolsUsed.includes(event.toolName)) {
-            toolsUsed.push(event.toolName);
-          }
-        }
-        callbacks?.onEvent?.(event);
-      },
-      requestApproval: callbacks?.requestApproval,
-    });
+    const agentLoop =
+      new AgentLoop({
+        llm: this.llm,
+        tools: this.tools,
+        memory: this.memory,
+        workspaceRoot:
+          config.workspaceRoot,
 
-    const taskRequest: AgentTaskRequest = {
+        /*
+         * IMPORTANT:
+         * Pass the MCPRegistry to AgentLoop.
+         *
+         * Without this, TaskToolContext only sees
+         * local tools and can never expose Google MCP
+         * discovery tools.
+         */
+        mcpRegistry:
+          this.mcpRegistry,
+
+        maxIterations:
+          config.agent.maxIterations,
+
+        timeoutSeconds:
+          config.agent.timeoutSeconds,
+
+        thinking:
+          config.ollama.thinking,
+
+        onEvent: (event) => {
+          if (
+            event.type ===
+            'tool_call_start'
+          ) {
+            if (
+              !toolsUsed.includes(
+                event.toolName
+              )
+            ) {
+              toolsUsed.push(
+                event.toolName
+              );
+            }
+          }
+
+          callbacks?.onEvent?.(
+            event
+          );
+        },
+
+        requestApproval:
+          callbacks?.requestApproval,
+      });
+
+    const taskRequest:
+      AgentTaskRequest = {
       taskId,
       sessionId,
       prompt,
-      signal: abortController.signal,
+      signal:
+        abortController.signal,
     };
 
     try {
-      const result = await agentLoop.run(taskRequest);
-      // Record task into persistent history
+      const result =
+        await agentLoop.run(
+          taskRequest
+        );
+
       this.taskHistory.recordTask({
         id: taskId,
-        timestamp: new Date().toISOString(),
+        timestamp:
+          new Date().toISOString(),
         prompt,
         success: result.success,
-        toolCallsCount: result.toolCallsCount,
+        toolCallsCount:
+          result.toolCallsCount,
         toolsUsed,
-        durationMs: result.durationMs,
-        summary: result.response.slice(0, 160).replace(/\n/g, ' '),
+        durationMs:
+          result.durationMs,
+        summary:
+          result.response
+            .slice(0, 160)
+            .replace(/\n/g, ' '),
       });
+
       return result;
     } finally {
-      this.activeTasks.delete(taskId);
+      this.activeTasks.delete(
+        taskId
+      );
     }
   }
 }

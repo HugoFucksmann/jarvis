@@ -24,6 +24,7 @@ import { attachWsHandler } from './ws/wsHandler.js';
 import { getSharedVisionProvider } from '../tools/builtins/visionTools.js';
 import { setSchedulerWebSocketBroadcaster } from '../scheduler/channels/HudChannels.js';
 import { getSharedSubagentManager } from '../subagents/SubagentManager.js';
+import { startTelegramBot } from '../telegram/TelegramBot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -127,4 +128,13 @@ server.listen(PORT, config.server.host, () => {
   logger.info(`  LLM Provider: Ollama (${config.ollama.model})      `);
   logger.info(`  Workspace: ${config.workspaceRoot}               `);
   logger.info(`====================================================`);
+
+  // ─── MCP: connect configured servers after HTTP is up ──────────────────
+  // Non-blocking: MCP failures won't crash the server.
+  agentCore.initMCP().catch((err: unknown) => {
+    logger.error(`MCP initialization error: ${err instanceof Error ? err.message : String(err)}`);
+  });
+
+  // ─── Telegram: start long-polling bot if token is configured ───────────
+  startTelegramBot(agentCore);
 });
