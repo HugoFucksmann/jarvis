@@ -38,80 +38,35 @@ interface DiscoveredOperation {
     cud?: string;
 }
 
-interface ServiceRule {
-    service: string;
-    server: string;
-    discoveryToolPattern: string;
-    displayName: string;
-    keywords: RegExp;
-}
-
-const SERVICE_RULES: ServiceRule[] = [
-    {
-        service: 'gmail',
-        server: 'google',
-        discoveryToolPattern: 'gmail_discover',
-        displayName: 'Gmail',
-        keywords:
-            /\b(gmail|mail|mails|correo|correos|email|emails|bandeja|inbox|mensaje|mensajes)\b/i,
-    },
-    {
-        service: 'calendar',
-        server: 'google',
-        discoveryToolPattern: 'calendar_discover',
-        displayName: 'Calendar',
-        keywords:
-            /\b(calendar|calendario|evento|eventos|cita|citas|reunion|reuniones|agenda)\b/i,
-    },
-    {
-        service: 'drive',
-        server: 'google',
-        discoveryToolPattern: 'drive_discover',
-        displayName: 'Drive',
-        keywords:
-            /\b(drive|google drive|archivo en drive|archivos en drive|archivos de drive|carpeta de drive)\b/i,
-    },
-    {
-        service: 'sheets',
-        server: 'google',
-        discoveryToolPattern: 'sheets_discover',
-        displayName: 'Sheets',
-        keywords:
-            /\b(sheets|hoja de calculo|hojas de calculo|spreadsheet|spreadsheets|planilla|planillas|excel)\b/i,
-    },
-    {
-        service: 'docs',
-        server: 'google',
-        discoveryToolPattern: 'docs_discover',
-        displayName: 'Docs',
-        keywords:
-            /\b(docs|google docs|documento de google|documentos de google)\b/i,
-    },
-    {
-        service: 'contacts',
-        server: 'google',
-        discoveryToolPattern: 'contacts_discover',
-        displayName: 'Contacts',
-        keywords:
-            /\b(contacts|contactos|contacto|libreta de direcciones)\b/i,
-    },
-    {
-        service: 'tasks',
-        server: 'google',
-        discoveryToolPattern: 'tasks_discover',
-        displayName: 'Tasks',
-        keywords:
-            /\b(tasks|google tasks|tareas de google)\b/i,
-    },
-    {
-        service: 'meet',
-        server: 'google',
-        discoveryToolPattern: 'meet_discover',
-        displayName: 'Meet',
-        keywords:
-            /\b(meet|google meet|videollamada|videollamadas)\b/i,
-    },
-];
+/**
+ * Puentes conceptuales para emparejar intenciones universales con herramientas del sistema.
+ */
+const ACTION_CONCEPTS: Record<string, string[]> = {
+    NAVIGATE: [
+        'abrir', 'abre', 'navegar', 'navega', 'navegador', 'entrar', 'visitar',
+        'open', 'browse', 'browser', 'navigate', 'url', 'web', 'link', 'site', 'website', 'http', 'pagina', 'imdb'
+    ],
+    MEDIA: [
+        'reproducir', 'reproduce', 'reproductor', 'poner', 'pon', 'escuchar', 'tocar', 'ver',
+        'play', 'player', 'media', 'music', 'video', 'youtube', 'audio', 'song', 'cancion', 'musica', 'sonido'
+    ],
+    SEARCH: [
+        'buscar', 'busca', 'busqueda', 'consultar', 'listar', 'lista', 'encontrar', 'ultimos', 'recientes',
+        'search', 'find', 'query', 'list', 'lookup', 'google'
+    ],
+    FILE_IO: [
+        'archivo', 'archivos', 'leer', 'lee', 'escribir', 'escribe', 'guardar', 'guarda', 'borrar', 'crear',
+        'file', 'files', 'read', 'write', 'save', 'delete', 'directory', 'folder', 'path', 'disco', 'txt', 'pdf'
+    ],
+    EXEC: [
+        'comando', 'terminal', 'consola', 'ejecutar', 'ejecuta', 'correr', 'shell', 'bash', 'cmd', 'powershell',
+        'command', 'exec', 'execute', 'run'
+    ],
+    SYSTEM: [
+        'volumen', 'audio', 'sonido', 'mute', 'silenciar', 'volume', 'sound',
+        'ventana', 'ventanas', 'window', 'power', 'apagar', 'reiniciar', 'clipboard', 'portapapeles', 'copiar', 'pegar'
+    ]
+};
 
 export class ToolPlanner {
     private tools: ToolRegistry;
@@ -119,7 +74,7 @@ export class ToolPlanner {
     private llm?: LLMProvider;
     private logger = new Logger('ToolPlanner');
 
-    // Cache interna de operaciones por servicio para evitar re-consultas en llamadas incrementales
+    // Cache interna de operaciones por server:tool
     private discoveryCache = new Map<string, DiscoveredOperation[]>();
 
     constructor(options: ToolPlannerOptions) {
@@ -129,7 +84,7 @@ export class ToolPlanner {
     }
 
     /**
-     * Planifica las herramientas mínimas e indispensables para cumplir la tarea.
+     * Determina las herramientas exactas para la tarea.
      */
     public async planInitialTools(
         prompt: string,
@@ -138,35 +93,28 @@ export class ToolPlanner {
         const plannedToolNames: string[] = [];
         const normalizedPrompt = this.normalize(prompt);
 
-        // 1. Detectar si la tarea apunta a un servicio MCP específico
-        const matchedServices = this.detectMatchedServices(normalizedPrompt);
+        // 1. Verificar si la tarea pide EXPLÍCITAMENTE un servicio MCP de forma inequívoca
+        const matchedDiscovery = this.findExplicitMCPDiscoveryTool(normalizedPrompt);
 
-        if (matchedServices.length > 0) {
-            for (const rule of matchedServices) {
-                this.logger.info(`Detected service: ${rule.service}`);
-                this.logger.info(`Selected MCP server: ${rule.server}`);
+        if (matchedDiscovery) {
+            const { adapter, serverName } = matchedDiscovery;
+            this.logger.info(`Detected explicit MCP service target: ${adapter.name} (server: ${serverName})`);
 
-                const serviceTools = await this.resolveServiceOperations(
-                    rule,
-                    normalizedPrompt,
-                    context
-                );
+            const serviceTools = await this.resolveMCPDiscoveryOperations(
+                serverName,
+                adapter,
+                normalizedPrompt,
+                context
+            );
 
-                for (const toolName of serviceTools) {
-                    if (!plannedToolNames.includes(toolName)) {
-                        plannedToolNames.push(toolName);
-                    }
+            for (const toolName of serviceTools) {
+                if (!plannedToolNames.includes(toolName)) {
+                    plannedToolNames.push(toolName);
                 }
             }
 
-            // Si se encontró un servicio específico (ej. Gmail), NO se agregan herramientas locales
-            // ni fallbacks genéricos a menos que el usuario haya pedido explícitamente persistencia local.
-            const requiresLocalFile =
-                /\b(guardar en disco|guardalo en un archivo|escribir archivo|guardar en txt)\b/i.test(
-                    normalizedPrompt
-                );
-
-            if (requiresLocalFile) {
+            // Si además pide explícitamente guardar en disco
+            if (this.hasActiveConcept(normalizedPrompt, 'FILE_IO')) {
                 const writeFileTool = this.tools.getTool('write_file');
                 if (writeFileTool) {
                     context.addTool(writeFileTool);
@@ -182,14 +130,13 @@ export class ToolPlanner {
             return {
                 tools: plannedToolNames,
                 requiresDiscovery: false,
-                reasoning: `Planned ${plannedToolNames.length} specific tool(s) for service: ${matchedServices
-                    .map((s) => s.displayName)
-                    .join(', ')}`,
+                reasoning: `Planned concrete tools via ${adapter.name}.`,
             };
         }
 
-        // 2. Tarea sin servicio MCP específico: Evaluar herramientas locales
+        // 2. Si no es un servicio MCP explícito, las herramientas locales son prioritarias
         const localTools = this.selectRelevantLocalTools(normalizedPrompt);
+
         for (const tool of localTools) {
             if (!context.getTool(tool.name)) {
                 context.addTool(tool);
@@ -199,15 +146,19 @@ export class ToolPlanner {
             }
         }
 
-        // 3. Fallback genérico únicamente si no hay herramientas seleccionadas y NO es puramente conversacional
+        // 3. Fallback inteligente solo si no se seleccionó ninguna herramienta y no es conversacional
         if (
             plannedToolNames.length === 0 &&
             !this.isPurelyConversational(normalizedPrompt)
         ) {
-            const fallbackTools = this.selectGenericFallback(normalizedPrompt);
+            const fallbackTools = this.getFallbackTools(normalizedPrompt);
             for (const tool of fallbackTools) {
-                context.addTool(tool);
-                plannedToolNames.push(tool.name);
+                if (!context.getTool(tool.name)) {
+                    context.addTool(tool);
+                }
+                if (!plannedToolNames.includes(tool.name)) {
+                    plannedToolNames.push(tool.name);
+                }
             }
         }
 
@@ -219,7 +170,7 @@ export class ToolPlanner {
         return {
             tools: plannedToolNames,
             requiresDiscovery: false,
-            reasoning: `Planned local/fallback tools for prompt.`,
+            reasoning: `Planned local tools based on semantic relevance.`,
         };
     }
 
@@ -230,64 +181,32 @@ export class ToolPlanner {
         const addedTools: string[] = [];
         const normalizedPrompt = this.normalize(params.prompt);
 
-        // Si ejecutó una búsqueda en Gmail y el prompt también requería leer o abrir el contenido
+        // Si ejecutó una búsqueda y requiere leer contenido
         if (
-            params.lastToolName === 'google__gmail_search' &&
+            params.lastToolName?.includes('search') &&
             params.lastResult?.success
         ) {
-            const hasReadIntent =
-                /\b(leer|lee|abrir|abre|ver|contenido|cuerpo|mensaje|read)\b/i.test(
-                    normalizedPrompt
-                );
+            const wantsRead =
+                /\b(leer|lee|abrir|abre|ver|contenido|cuerpo|mensaje|read)\b/i.test(normalizedPrompt);
 
-            if (hasReadIntent && !params.context.getTool('google__gmail_read')) {
-                const client = this.mcpRegistry?.getClient('google');
-                if (client) {
-                    const cachedOps = this.discoveryCache.get('google:gmail_discover') ?? [];
-                    const readOp = cachedOps.find(
-                        (op) => op.tool === 'gmail_read' || op.tool?.endsWith('_read')
+            if (wantsRead) {
+                for (const [cacheKey, ops] of this.discoveryCache.entries()) {
+                    const [serverName] = cacheKey.split(':');
+                    const client = this.mcpRegistry?.getClient(serverName);
+                    if (!client) continue;
+
+                    const readOp = ops.find((op) =>
+                        (op.tool ?? '').includes('read') || (op.tool ?? '').includes('get')
                     );
 
                     if (readOp?.tool) {
-                        const adapter = this.createMCPAdapter(client, 'google', readOp);
-                        params.context.addTool(adapter);
-                        addedTools.push(adapter.name);
-                        this.logger.info(
-                            `Planner incrementally added tool on replan: ${adapter.name}`
-                        );
-                    }
-                }
-            }
-        }
-
-        // Si ejecutó lectura de mensaje y el prompt requería descargar adjuntos
-        if (
-            params.lastToolName === 'google__gmail_read' &&
-            params.lastResult?.success
-        ) {
-            const hasAttachmentIntent =
-                /\b(adjunto|adjuntos|pdf|descargar|descarga|download|attachment)\b/i.test(
-                    normalizedPrompt
-                );
-
-            if (
-                hasAttachmentIntent &&
-                !params.context.getTool('google__gmail_download_attachment')
-            ) {
-                const client = this.mcpRegistry?.getClient('google');
-                if (client) {
-                    const cachedOps = this.discoveryCache.get('google:gmail_discover') ?? [];
-                    const attachOp = cachedOps.find((op) =>
-                        (op.tool ?? '').includes('attachment')
-                    );
-
-                    if (attachOp?.tool) {
-                        const adapter = this.createMCPAdapter(client, 'google', attachOp);
-                        params.context.addTool(adapter);
-                        addedTools.push(adapter.name);
-                        this.logger.info(
-                            `Planner incrementally added tool on replan: ${adapter.name}`
-                        );
+                        const fullName = `${serverName}__${readOp.tool}`;
+                        if (!params.context.getTool(fullName)) {
+                            const adapter = this.buildDiscoveredAdapter(client, serverName, readOp);
+                            params.context.addTool(adapter);
+                            addedTools.push(adapter.name);
+                            this.logger.info(`Planner incrementally added tool: ${adapter.name}`);
+                        }
                     }
                 }
             }
@@ -303,7 +222,7 @@ export class ToolPlanner {
     }
 
     /**
-     * Resuelve dinámicamente una herramienta si el modelo la requiere durante el razonamiento.
+     * Permite incorporar dinámicamente cualquier herramienta registrada si el modelo la invoca.
      */
     public resolveTool(toolName: string, context: TaskToolContext): boolean {
         const tool = this.tools.getTool(toolName);
@@ -317,91 +236,239 @@ export class ToolPlanner {
         return false;
     }
 
+    // ---------------------------------------------------------------------------
+    // DETECCIÓN ESTRICTA DE SERVICIOS MCP (Anti-Secuestro)
+    // ---------------------------------------------------------------------------
+
     /**
-     * Resuelve internamente las operaciones de un servicio específico mediante discovery único.
+     * Verifica si la solicitud apunta explícitamente a un servicio MCP específico.
+     * Evita que palabras genéricas como 'web' o 'search' disparen herramientas como Search Console.
      */
-    private async resolveServiceOperations(
-        rule: ServiceRule,
+    private findExplicitMCPDiscoveryTool(prompt: string): {
+        adapter: MCPToolAdapter;
+        serverName: string;
+    } | null {
+        if (!this.mcpRegistry) return null;
+
+        // Reglas de dominio estricto por servicio MCP
+        const domainMatchers: Array<{ pattern: RegExp; discoveryKey: string }> = [
+            { pattern: /\b(gmail|mail|mails|correo|correos|email|emails|bandeja|inbox)\b/i, discoveryKey: 'gmail_discover' },
+            { pattern: /\b(calendar|calendario|evento|eventos|cita|citas|agenda)\b/i, discoveryKey: 'calendar_discover' },
+            { pattern: /\b(google drive|gdrive|archivos de drive|carpeta de drive)\b/i, discoveryKey: 'drive_discover' },
+            { pattern: /\b(google sheets|sheets|hoja de calculo|hojas de calculo|spreadsheet)\b/i, discoveryKey: 'sheets_discover' },
+            { pattern: /\b(google docs|documento de google|documentos de google)\b/i, discoveryKey: 'docs_discover' },
+            { pattern: /\b(google contacts|contactos de google|libreta de direcciones)\b/i, discoveryKey: 'contacts_discover' },
+            { pattern: /\b(search console|searchconsole|google search console|sitemaps)\b/i, discoveryKey: 'searchconsole_discover' },
+            { pattern: /\b(google tasks|tareas de google)\b/i, discoveryKey: 'tasks_discover' },
+            { pattern: /\b(google meet|videollamada de meet)\b/i, discoveryKey: 'meet_discover' },
+        ];
+
+        for (const matcher of domainMatchers) {
+            if (matcher.pattern.test(prompt)) {
+                for (const serverName of this.mcpRegistry.getServerNames()) {
+                    const serverTools = this.mcpRegistry.getTools(serverName);
+                    const found = serverTools.find((t) =>
+                        t.name.toLowerCase().includes(matcher.discoveryKey.toLowerCase())
+                    );
+                    if (found) {
+                        return { adapter: found, serverName };
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // ---------------------------------------------------------------------------
+    // MOTOR DE PONDERACIÓN Y RECUPERACIÓN DE HERRAMIENTAS LOCALES
+    // ---------------------------------------------------------------------------
+
+    private selectRelevantLocalTools(prompt: string): ITool[] {
+        const promptTokens = this.extractTokens(prompt);
+        const localTools = this.tools
+            .getAllTools()
+            .filter((t) => !t.name.includes('__'));
+
+        const scored = localTools
+            .map((tool) => {
+                const paramsObj = (tool.parameters as any)?.properties;
+                const score = this.scoreToolRelevance(
+                    tool.name,
+                    tool.description,
+                    paramsObj,
+                    promptTokens,
+                    prompt
+                );
+                return { tool, score };
+            })
+            .filter((item) => item.score > 0)
+            .sort((a, b) => b.score - a.score);
+
+        // Retorna hasta 6 herramientas para que acciones compuestas
+        // (ej. buscar y abrir la web) tengan disponibles tanto 'web_search' como 'open_url' y 'browse_web'.
+        return scored.slice(0, 6).map((item) => item.tool);
+    }
+
+    private scoreToolRelevance(
+        name: string,
+        description: string,
+        parametersObj: Record<string, unknown> | undefined,
+        promptTokens: string[],
+        prompt: string
+    ): number {
+        const normName = this.normalize(name);
+        const normDesc = this.normalize(description);
+        const nameParts = normName.split(/[_-]/).filter((p) => p.length >= 2);
+
+        let score = 0;
+
+        // 1. Coincidencia directa del nombre de la herramienta o sus partes en el prompt
+        for (const part of nameParts) {
+            if (prompt.includes(part)) {
+                score += 15;
+            }
+        }
+
+        // 2. Evaluación de tokens y similitud difusa (Trigrams)
+        for (const token of promptTokens) {
+            if (token.length < 3) continue;
+
+            if (normName.includes(token)) score += 12;
+            if (normDesc.includes(token)) score += 4;
+
+            for (const part of nameParts) {
+                const sim = this.trigramSimilarity(token, part);
+                if (sim >= 0.7) score += 10 * sim;
+            }
+
+            const descWords = normDesc.split(/\s+/).filter((w) => w.length >= 4);
+            for (const dw of descWords) {
+                if (this.trigramSimilarity(token, dw) >= 0.8) {
+                    score += 3;
+                    break;
+                }
+            }
+        }
+
+        // 3. Activación por conceptos de acción
+        for (const [, conceptTerms] of Object.entries(ACTION_CONCEPTS)) {
+            const promptHasConcept = conceptTerms.some((term) => prompt.includes(term));
+            if (!promptHasConcept) continue;
+
+            const toolHasConcept = conceptTerms.some(
+                (term) => normName.includes(term) || normDesc.includes(term)
+            );
+
+            if (toolHasConcept) {
+                score += 8;
+            }
+        }
+
+        // 4. Ponderación por parámetros
+        if (parametersObj && typeof parametersObj === 'object') {
+            const paramNames = Object.keys(parametersObj).map((p) => this.normalize(p));
+            for (const pName of paramNames) {
+                if (prompt.includes(pName)) {
+                    score += 5;
+                }
+            }
+        }
+
+        return score;
+    }
+
+    private trigramSimilarity(a: string, b: string): number {
+        if (a === b) return 1.0;
+        if (a.length < 3 || b.length < 3) {
+            return a.includes(b) || b.includes(a) ? 0.8 : 0.0;
+        }
+
+        const trigramsA = new Set<string>();
+        for (let i = 0; i <= a.length - 3; i++) {
+            trigramsA.add(a.substring(i, i + 3));
+        }
+
+        let matches = 0;
+        const totalB = b.length - 2;
+        for (let i = 0; i <= totalB - 1; i++) {
+            if (trigramsA.has(b.substring(i, i + 3))) {
+                matches++;
+            }
+        }
+
+        return (2.0 * matches) / (trigramsA.size + totalB);
+    }
+
+    private hasActiveConcept(prompt: string, conceptName: string): boolean {
+        const terms = ACTION_CONCEPTS[conceptName];
+        if (!terms) return false;
+        return terms.some((t) => prompt.includes(t));
+    }
+
+    // ---------------------------------------------------------------------------
+    // RESOLUCIÓN DE DISCOVERY MCP
+    // ---------------------------------------------------------------------------
+
+    private async resolveMCPDiscoveryOperations(
+        serverName: string,
+        discoveryAdapter: MCPToolAdapter,
         prompt: string,
         context: TaskToolContext
     ): Promise<string[]> {
-        if (!this.mcpRegistry) {
-            return [];
-        }
+        const client = this.mcpRegistry?.getClient(serverName);
+        if (!client) return [];
 
-        const client = this.mcpRegistry.getClient(rule.server);
-        if (!client) {
-            this.logger.warn(`MCP client for server "${rule.server}" not found.`);
-            return [];
-        }
-
-        const serverTools = this.mcpRegistry.getTools(rule.server);
-        const discoveryAdapter = serverTools.find((t) => {
-            const name = t.name.toLowerCase();
-            return name.includes(rule.discoveryToolPattern.toLowerCase());
-        });
-
-        if (!discoveryAdapter) {
-            this.logger.warn(
-                `Discovery adapter matching "${rule.discoveryToolPattern}" not found on server "${rule.server}".`
-            );
-            return [];
-        }
-
-        const cacheKey = `${rule.server}:${rule.discoveryToolPattern}`;
+        const cacheKey = `${serverName}:${discoveryAdapter.name}`;
         let operations = this.discoveryCache.get(cacheKey);
 
         if (!operations) {
-            this.logger.info(
-                `Running internal MCP discovery via ${discoveryAdapter.name}`
-            );
+            this.logger.info(`Running internal MCP discovery via ${discoveryAdapter.name}`);
 
             const execContext: ToolExecutionContext = {
                 workspaceRoot: '',
                 requestApproval: async () => true,
             };
 
-            // Importante: No enviar el prompt en lenguaje natural como filtro del query al MCP server.
-            // Se consulta con cadena vacía para obtener el catálogo completo del servicio.
-            const discResult = await discoveryAdapter.execute(
-                { query: '' },
-                execContext
-            );
+            const discResult = await discoveryAdapter.execute({ query: '' }, execContext);
 
             if (discResult.success && discResult.data) {
                 operations = this.parseDiscoveryPayload(discResult.data);
                 this.discoveryCache.set(cacheKey, operations);
             } else {
-                this.logger.warn(
-                    `Discovery execution returned error: ${discResult.error}`
-                );
+                this.logger.warn(`Discovery failed on ${discoveryAdapter.name}: ${discResult.error}`);
                 operations = [];
             }
         }
 
-        this.logger.info(
-            `Discovered ${operations.length} ${rule.displayName} operations`
-        );
+        this.logger.info(`Discovered ${operations.length} operations from ${discoveryAdapter.name}`);
+        if (operations.length === 0) return [];
 
-        if (operations.length === 0) {
-            return [];
-        }
+        const promptTokens = this.extractTokens(prompt);
 
-        // Seleccionar la operación más relevante según la intención
-        const selectedOps = this.selectOperationForService(
-            rule.service,
-            operations,
-            prompt
-        );
+        const scoredOperations = operations
+            .filter((op) => op.tool)
+            .map((op) => {
+                const score = this.scoreToolRelevance(
+                    op.tool!,
+                    op.summary ?? '',
+                    op.args ? Object.fromEntries(op.args.map((a) => [a, 'string'])) : undefined,
+                    promptTokens,
+                    prompt
+                );
+                return { op, score };
+            })
+            .sort((a, b) => b.score - a.score);
+
+        const best = scoredOperations.filter((item) => item.score > 0);
+        const selectedOps = best.length > 0 ? [best[0].op] : [operations[0]];
 
         const addedToolNames: string[] = [];
-
         for (const op of selectedOps) {
             if (!op.tool) continue;
 
             this.logger.info(`Selected operation: ${op.tool}`);
-
-            const adapter = this.createMCPAdapter(client, rule.server, op);
+            const adapter = this.buildDiscoveredAdapter(client, serverName, op);
             context.addTool(adapter);
             addedToolNames.push(adapter.name);
         }
@@ -409,110 +476,12 @@ export class ToolPlanner {
         return addedToolNames;
     }
 
-    /**
-     * Selecciona la operación adecuada dentro del catálogo según la semántica de la solicitud.
-     */
-    private selectOperationForService(
-        service: string,
-        operations: DiscoveredOperation[],
-        prompt: string
-    ): DiscoveredOperation[] {
-        const isSearchIntent =
-            /\b(busca|buscar|busqueda|encontrar|encuentra|listar|lista|ultimos|ultimo|ultimas|search|find|list)\b/i.test(
-                prompt
-            );
-
-        const isReadIntent =
-            /\b(leer|lee|leerme|abrir|abre|contenido|cuerpo|read|body|open|ver)\b/i.test(
-                prompt
-            );
-
-        const isWriteIntent =
-            /\b(enviar|envia|mandar|manda|crear|crea|borrar|borra|eliminar|elimina|send|create|delete)\b/i.test(
-                prompt
-            );
-
-        if (service === 'gmail') {
-            // Prioridad 1: Búsqueda o listado
-            if (isSearchIntent && !isWriteIntent) {
-                const searchOp = operations.find(
-                    (op) =>
-                        op.tool === 'gmail_search' ||
-                        op.tool === 'messages_search' ||
-                        op.tool?.endsWith('_search')
-                );
-                if (searchOp) {
-                    return [searchOp];
-                }
-            }
-
-            // Prioridad 2: Lectura de correo específico
-            if (isReadIntent && !isWriteIntent) {
-                const readOp = operations.find(
-                    (op) =>
-                        op.tool === 'gmail_read' ||
-                        op.tool === 'messages_get' ||
-                        op.tool?.endsWith('_read')
-                );
-                if (readOp) {
-                    return [readOp];
-                }
-            }
-
-            // Prioridad 3: Envío o redacción
-            if (isWriteIntent) {
-                const sendOp = operations.find(
-                    (op) =>
-                        op.tool === 'gmail_send' ||
-                        op.tool === 'messages_send' ||
-                        op.tool?.endsWith('_send')
-                );
-                if (sendOp) {
-                    return [sendOp];
-                }
-            }
-
-            // Fallback predeterminado para Gmail: gmail_search
-            const defaultSearch = operations.find((op) =>
-                (op.tool ?? '').includes('search')
-            );
-            if (defaultSearch) {
-                return [defaultSearch];
-            }
-        }
-
-        if (service === 'calendar') {
-            if (isWriteIntent) {
-                const createOp = operations.find((op) =>
-                    (op.tool ?? '').includes('create') || (op.tool ?? '').includes('insert')
-                );
-                if (createOp) return [createOp];
-            }
-            const listOp = operations.find((op) =>
-                (op.tool ?? '').includes('list') || (op.tool ?? '').includes('get')
-            );
-            if (listOp) return [listOp];
-        }
-
-        if (service === 'drive') {
-            if (isSearchIntent || isReadIntent) {
-                const searchOp = operations.find((op) =>
-                    (op.tool ?? '').includes('search') || (op.tool ?? '').includes('list')
-                );
-                if (searchOp) return [searchOp];
-            }
-        }
-
-        return operations.slice(0, 1);
-    }
-
-    private createMCPAdapter(
+    private buildDiscoveredAdapter(
         client: any,
         serverName: string,
         op: DiscoveredOperation
     ): MCPToolAdapter {
         const properties: Record<string, unknown> = {};
-
         for (const arg of op.args ?? []) {
             properties[arg] = {
                 type: 'string',
@@ -530,93 +499,29 @@ export class ToolPlanner {
         });
     }
 
-    private detectMatchedServices(prompt: string): ServiceRule[] {
-        const matched: ServiceRule[] = [];
+    private getFallbackTools(prompt: string): ITool[] {
+        const candidates: ITool[] = [];
 
-        for (const rule of SERVICE_RULES) {
-            if (rule.keywords.test(prompt)) {
-                matched.push(rule);
-            }
-        }
-
-        return matched;
-    }
-
-    private selectRelevantLocalTools(prompt: string): ITool[] {
-        const tokens = this.tokenize(prompt);
-        const localTools = this.tools
-            .getAllTools()
-            .filter((t) => !t.name.includes('__'));
-
-        const scored = localTools
-            .map((tool) => ({
-                tool,
-                score: this.scoreLocalTool(tool, prompt, tokens),
-            }))
-            .filter((item) => item.score >= 5)
-            .sort((a, b) => b.score - a.score);
-
-        return scored.slice(0, 3).map((item) => item.tool);
-    }
-
-    private scoreLocalTool(
-        tool: ITool,
-        _prompt: string,
-        tokens: Set<string>
-    ): number {
-        const name = this.normalize(tool.name);
-        const description = this.normalize(tool.description);
-        const combined = `${name} ${description}`;
-        let score = 0;
-
-        for (const token of tokens) {
-            if (token.length < 3) continue;
-            if (name.includes(token)) score += 6;
-            if (description.includes(token)) score += 2;
-        }
-
-        const aliases: Record<string, string[]> = {
-            abrir: ['open', 'launch', 'application', 'app'],
-            abre: ['open', 'launch', 'application', 'app'],
-            calculadora: ['calculator', 'application'],
-            volumen: ['volume', 'audio'],
-            musica: ['media', 'music'],
-            música: ['media', 'music'],
-            portapapeles: ['clipboard'],
-            archivo: ['file', 'read', 'write'],
-            comando: ['command', 'execute', 'terminal'],
-        };
-
-        for (const token of tokens) {
-            const aliasList = aliases[token];
-            if (aliasList) {
-                for (const alias of aliasList) {
-                    if (combined.includes(alias)) {
-                        score += 5;
-                    }
-                }
-            }
-        }
-
-        return score;
-    }
-
-    private selectGenericFallback(prompt: string): ITool[] {
-        if (
-            /\b(busca|buscar|informacion|que es|quien es|noticias|web|internet)\b/i.test(
-                prompt
-            )
-        ) {
+        if (this.hasActiveConcept(prompt, 'NAVIGATE') || this.hasActiveConcept(prompt, 'SEARCH')) {
+            const openUrl = this.tools.getTool('open_url');
+            if (openUrl) candidates.push(openUrl);
+            const browseWeb = this.tools.getTool('browse_web');
+            if (browseWeb) candidates.push(browseWeb);
             const webSearch = this.tools.getTool('web_search');
-            if (webSearch) return [webSearch];
+            if (webSearch) candidates.push(webSearch);
         }
 
-        if (/\b(archivo|leer|lee|cat|texto)\b/i.test(prompt)) {
+        if (this.hasActiveConcept(prompt, 'MEDIA')) {
+            const media = this.tools.getTool('control_media');
+            if (media && !candidates.includes(media)) candidates.push(media);
+        }
+
+        if (this.hasActiveConcept(prompt, 'FILE_IO')) {
             const readFile = this.tools.getTool('read_file');
-            if (readFile) return [readFile];
+            if (readFile && !candidates.includes(readFile)) candidates.push(readFile);
         }
 
-        return [];
+        return candidates;
     }
 
     private isPurelyConversational(prompt: string): boolean {
@@ -630,15 +535,9 @@ export class ToolPlanner {
             const raw = typeof data === 'string' ? data : JSON.stringify(data);
             const parsed = JSON.parse(raw);
 
-            if (Array.isArray(parsed)) {
-                return parsed;
-            }
-            if (Array.isArray(parsed.operations)) {
-                return parsed.operations;
-            }
-            if (Array.isArray(parsed.tools)) {
-                return parsed.tools;
-            }
+            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed.operations)) return parsed.operations;
+            if (Array.isArray(parsed.tools)) return parsed.tools;
         } catch {
             // Ignorar error de parsing
         }
@@ -655,11 +554,14 @@ export class ToolPlanner {
             .trim();
     }
 
-    private tokenize(value: string): Set<string> {
-        return new Set(
-            value
-                .split(/\s+/)
-                .filter((token) => token.length >= 3)
-        );
+    private extractTokens(value: string): string[] {
+        const stopWords = new Set([
+            'de', 'la', 'el', 'en', 'por', 'los', 'las', 'un', 'una', 'para',
+            'con', 'al', 'del', 'que', 'los', 'mis', 'tus', 'sus', 'este', 'esta'
+        ]);
+
+        return this.normalize(value)
+            .split(/\s+/)
+            .filter((token) => token.length >= 3 && !stopWords.has(token));
     }
 }

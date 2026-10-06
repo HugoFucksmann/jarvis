@@ -1,6 +1,6 @@
 /**
  * ws.js — WebSocket client connection & message routing.
- *         Coordinates streaming tokens, tool indicators, approvals, and task cancellation.
+ *         Coordinates streaming tokens, tool steps, approvals, and task cancellation.
  */
 import { state, dom, WS_URL } from './state.js';
 import { setMode, setActivity, setReactorState, settleMode, showNotice, hideNotice } from './ui.js';
@@ -8,11 +8,13 @@ import { formatMarkdown } from './markdown.js';
 import { feedSpeechToken, flushSpeechBuffer, speakChunk, stopSpeech } from './tts.js';
 import { showApproval } from './approvals.js';
 import { handleSubagentWsEvent } from './subagents.js';
+import { resetSteps, addNote, startTool, endTool, finishSteps } from './steps.js';
 
 let reconnectTimer = null;
 let retryCount = 0;
 let ignoreTokens = false; // true tras "Limpiar" durante una tarea en curso
 let renderQueued = false;
+let segmentStart = 0; // índice de rawResponse donde empieza el texto posterior a la última herramienta
 
 // ── Render de la respuesta (1 render por frame, no 1 por token) ──────────────
 function renderResponse() {
@@ -39,6 +41,21 @@ function flushRender() {
   renderResponse();
 }
 
+/**
+ * El texto emitido ANTES de una herramienta es un comentario del agente:
+ * se mueve a la traza de pasos y sale de la respuesta. El texto tras la
+ * última herramienta queda como respuesta final.
+ */
+function commitSegmentAsNote() {
+  const segment = state.rawResponse.slice(segmentStart).trim();
+  if (segment) {
+    addNote(segment);
+    state.rawResponse = state.rawResponse.slice(0, segmentStart);
+    flushRender();
+  }
+  segmentStart = state.rawResponse.length;
+}
+
 // ── Conexión ─────────────────────────────────────────────────────────────────
 function scheduleReconnect(sessionId) {
   clearTimeout(reconnectTimer);
@@ -61,6 +78,7 @@ function handleDisconnect() {
     state.isExecuting = false;
     stopSpeech();
     flushRender();
+    finishSteps();
     setActivity(false);
     settleMode();
   } else {
@@ -165,10 +183,24 @@ export function handleAgentEvent(event) {
         dom.toolBadge.textContent = event.toolName;
       }
       setActivity(true, `Ejecutando ${event.toolName}...`);
+      if (ignoreTokens) break;
+      if (dom.container.dataset.mode === 'idle') setMode('responding');
+      commitSegmentAsNote();
+      // Los nombres de campo de los argumentos/id se leen de forma tolerante
+      startTool(
+        event.toolName,
+        event.args ?? event.arguments ?? event.input ?? event.toolInput,
+        event.toolCallId ?? event.callId ?? event.id
+      );
       break;
 
     case 'tool_call_result':
-      // La UI se entera del progreso mediante state_change
+      if (ignoreTokens) break;
+      endTool(
+        event.toolName,
+        !(event.success === false || event.isError === true || event.error),
+        event.toolCallId ?? event.callId ?? event.id
+      );
       break;
 
     case 'task_complete':
@@ -189,6 +221,7 @@ export function finishTask() {
   state.isExecuting = false;
   flushSpeechBuffer();
   flushRender();
+  finishSteps();
   setActivity(false);
   settleMode();
 }
@@ -235,6 +268,8 @@ export function sendPrompt(sessionId) {
   state.lastPrompt = text;
   state.rawResponse = '';
   state.taskStart = Date.now();
+  segmentStart = 0;
+  resetSteps();
   if (dom.body) dom.body.innerHTML = '';
   if (dom.copyBtn) dom.copyBtn.disabled = true;
   if (dom.content) dom.content.scrollTop = 0;
@@ -257,6 +292,8 @@ export function clearResponse() {
   }
   renderQueued = false;
   state.rawResponse = '';
+  segmentStart = 0;
+  resetSteps();
   if (dom.body) dom.body.innerHTML = '';
   if (dom.copyBtn) dom.copyBtn.disabled = true;
   if (dom.promptEcho) dom.promptEcho.textContent = '';

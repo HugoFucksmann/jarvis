@@ -1213,3 +1213,283 @@ button:focus-visible,
 .sec-btn.confirm:hover {
   opacity: 0.88;
 }
+
+/* ==========================================================================
+   Traza de pasos del agente (añadir al final de native.css,
+   antes de "Confirmación de seguridad" o al final del archivo)
+   ========================================================================== */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Línea resumen: "▸ 4 pasos · 3.2s" */
+.steps-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-left: -2px;
+  padding: 2px 8px 2px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.steps-summary:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.steps-summary:focus-visible,
+.step:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.steps-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.steps[data-open="true"] .steps-chevron {
+  transform: rotate(90deg);
+}
+
+/* Lista: misma altura máxima + scroll interno que el resto de listas */
+.steps-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 0;
+}
+
+.steps-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.steps-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+/* Plegado: en curso → solo el último paso; terminado → solo el resumen */
+.steps[data-open="false"][data-state="done"] .steps-list {
+  display: none;
+}
+
+.steps[data-open="false"][data-state="running"] .step:not(:last-child) {
+  display: none;
+}
+
+.steps[data-open="false"] .step::before {
+  display: none;
+}
+
+/* Paso */
+.step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  padding: 2px 6px 2px 0;
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.step:hover {
+  color: var(--text-main);
+}
+
+/* Riel vertical tenue que une los puntos */
+.step::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: -1px;
+  width: 1px;
+  background: var(--border);
+}
+
+.step:first-child::before {
+  top: 50%;
+}
+
+.step:last-child::before {
+  bottom: 50%;
+}
+
+.step-dot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  /* "recorta" el riel alrededor del punto */
+  box-shadow: 0 0 0 3px var(--bg-window);
+}
+
+/* Comentario: punto hueco + texto atenuado */
+.step-note .step-dot {
+  background: var(--bg-window);
+  border: 1px solid var(--text-muted);
+}
+
+.step-text,
+.step-arg {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-text {
+  color: var(--text-muted);
+}
+
+.step:hover .step-text {
+  color: var(--text-dim);
+}
+
+/* Herramienta: chip + argumento + duración */
+.step-chip {
+  flex-shrink: 0;
+  max-width: 40%;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-arg {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.step-time {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+/* Estados */
+.step[data-state="running"] .step-dot {
+  background: var(--accent-blue);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.step[data-state="running"] .step-chip {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-blue);
+}
+
+.step[data-state="ok"] .step-dot {
+  background: var(--accent-green);
+}
+
+.step[data-state="fail"] .step-dot {
+  background: var(--accent-red);
+}
+
+.step[data-state="fail"] .step-time {
+  color: var(--accent-red);
+}
+
+.step[data-state="stopped"] .step-dot {
+  background: var(--accent-amber);
+}
+
+/* Expandido (clic): texto completo */
+.step.is-expanded {
+  align-items: flex-start;
+}
+
+.step.is-expanded .step-dot {
+  margin-top: 6px;
+}
+
+.step.is-expanded .step-text,
+.step.is-expanded .step-arg {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+/* Separador sutil entre la traza y la respuesta final */
+.steps:not([hidden])+.stream-content:not(:empty) {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Comentario expandido: markdown renderizado */
+.step-note.is-expanded .step-text {
+  color: var(--text-dim);
+  line-height: 1.55;
+  user-select: text;
+}
+
+.step-text>*+* {
+  margin-top: 0.5em;
+}
+
+.step-text ul,
+.step-text ol {
+  padding-left: 1.3em;
+}
+
+.step-text strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.step-text a {
+  color: var(--accent-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.step-text :not(pre)>code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.step-text pre {
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  overflow-x: auto;
+}
